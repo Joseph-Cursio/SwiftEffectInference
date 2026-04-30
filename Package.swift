@@ -23,7 +23,10 @@ let package = Package(
         // SwiftInferProperties M1.1). No SPL- or SwiftInfer-specific types.
         // Pinned exact to match SwiftProjectLint (one of the two initial
         // consumers, on Swift 6.2). Bump alongside SPL's pin when SPL moves.
-        .package(url: "https://github.com/swiftlang/swift-syntax.git", exact: "602.0.0")
+        // URL matches SwiftProjectLint's pin (apple/swift-syntax). swift-syntax
+        // moved from apple/ to swiftlang/ but both refer to the same package
+        // identity; SPM warns when chains use different URLs.
+        .package(url: "https://github.com/apple/swift-syntax.git", exact: "602.0.0")
     ],
     targets: [
         .target(
