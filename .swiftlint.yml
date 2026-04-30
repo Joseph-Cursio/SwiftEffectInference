@@ -7,9 +7,45 @@ excluded:
   - docs
   - Package.swift
 
-# Match SwiftInferProperties / SwiftProtocolLaws identifier_name relaxations.
+# Disabled rules — match SwiftProjectLint's policy on "whitelist" terminology.
+# SwiftEffectInference inherits one local identifier (`onWhitelist` in
+# CallSiteEffectInferrer) from the SPL lift; the term is product-historical
+# rather than worth churning the diff for.
+disabled_rules:
+  - inclusive_language
+
+# Identifier name — match SwiftInferProperties / SwiftProtocolLaws relaxations
+# plus `lub` (lattice least-upper-bound, fundamental to this library).
 identifier_name:
   excluded:
     - id
     - lub
   max_length: 50
+
+# Relaxed thresholds — adopted from SwiftProjectLint, which originated the
+# code lifted in migration step 3. The inference engines are intentionally
+# longer than typical Swift code (long-tail classification logic + curated
+# framework tables).
+file_length:
+  warning: 600
+  error: 1000
+  ignore_comment_only_lines: true
+
+function_body_length:
+  warning: 100
+  error: 200
+
+type_body_length:
+  warning: 300
+  error: 500
+
+cyclomatic_complexity:
+  warning: 15
+  error: 25
+
+line_length:
+  warning: 120
+  error: 150
+  ignores_function_declarations: true
+  ignores_comments: true
+  ignores_urls: true
