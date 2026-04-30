@@ -1,0 +1,15 @@
+included:
+  - Sources
+  - Tests
+
+excluded:
+  - .build
+  - docs
+  - Package.swift
+
+# Match SwiftInferProperties / SwiftProtocolLaws identifier_name relaxations.
+identifier_name:
+  excluded:
+    - id
+    - lub
+  max_length: 50
