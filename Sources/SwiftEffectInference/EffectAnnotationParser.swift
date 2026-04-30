@@ -62,6 +62,26 @@ public struct EffectAnnotationParser: Sendable {
         self.recognition = recognition
     }
 
+    // MARK: Static convenience (default-recognition shortcuts)
+
+    /// Convenience for callers that don't customize attribute recognition.
+    /// Equivalent to `EffectAnnotationParser().parseEffect(leadingTrivia:)`.
+    public static func parseEffect(leadingTrivia: Trivia) -> Effect? {
+        EffectAnnotationParser().parseEffect(leadingTrivia: leadingTrivia)
+    }
+
+    /// Convenience for callers that don't customize attribute recognition.
+    /// Equivalent to `EffectAnnotationParser().parseEffect(declaration:)`.
+    public static func parseEffect(declaration: FunctionDeclSyntax) -> Effect? {
+        EffectAnnotationParser().parseEffect(declaration: declaration)
+    }
+
+    /// Convenience for callers that don't customize attribute recognition.
+    /// Equivalent to `EffectAnnotationParser().parseEffect(declaration:)`.
+    public static func parseEffect(declaration: VariableDeclSyntax) -> Effect? {
+        EffectAnnotationParser().parseEffect(declaration: declaration)
+    }
+
     // MARK: Public API
 
     /// Reads the `@lint.effect` tier declared on a node, scanning only the
