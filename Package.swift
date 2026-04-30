@@ -21,7 +21,9 @@ let package = Package(
         // only required dep. No swift-testing in the library target (that's
         // the swift-property-based-via-Testing.framework trap that bit
         // SwiftInferProperties M1.1). No SPL- or SwiftInfer-specific types.
-        .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.0")
+        // Pinned exact to match SwiftProjectLint (one of the two initial
+        // consumers, on Swift 6.2). Bump alongside SPL's pin when SPL moves.
+        .package(url: "https://github.com/swiftlang/swift-syntax.git", exact: "602.0.0")
     ],
     targets: [
         .target(
