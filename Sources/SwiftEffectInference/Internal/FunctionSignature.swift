@@ -163,7 +163,7 @@ public extension FunctionSignature {
     /// callee expression is not a plain identifier or member access that the
     /// Phase-1 linter can resolve.
     static func from(call: FunctionCallExprSyntax) -> FunctionSignature? {
-        guard let name = calleeBaseName(of: call.calledExpression) else { return nil }
+        guard let name = call.calledExpression.referenceBaseName else { return nil }
 
         var labels: [String] = call.arguments.map { arg in
             arg.label?.text ?? "_"
@@ -181,15 +181,5 @@ public extension FunctionSignature {
         }
 
         return FunctionSignature(name: name, argumentLabels: labels)
-    }
-
-    private static func calleeBaseName(of expr: ExprSyntax) -> String? {
-        if let ref = expr.as(DeclReferenceExprSyntax.self) {
-            return ref.baseName.text
-        }
-        if let member = expr.as(MemberAccessExprSyntax.self) {
-            return member.declName.baseName.text
-        }
-        return nil
     }
 }

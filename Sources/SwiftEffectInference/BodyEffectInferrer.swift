@@ -186,7 +186,7 @@ public enum BodyEffectInferrer {
         var node = Syntax(closure).parent
         while let current = node {
             if let call = current.as(FunctionCallExprSyntax.self) {
-                if let name = directCalleeName(of: call.calledExpression),
+                if let name = call.calledExpression.referenceBaseName,
                    escapingCalleeNames.contains(name) {
                     return true
                 }
@@ -195,16 +195,6 @@ public enum BodyEffectInferrer {
             node = current.parent
         }
         return false
-    }
-
-    private static func directCalleeName(of expr: ExprSyntax) -> String? {
-        if let ref = expr.as(DeclReferenceExprSyntax.self) {
-            return ref.baseName.text
-        }
-        if let member = expr.as(MemberAccessExprSyntax.self) {
-            return member.declName.baseName.text
-        }
-        return nil
     }
 
     private static let escapingCalleeNames: Set<String> = [

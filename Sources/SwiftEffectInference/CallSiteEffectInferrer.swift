@@ -387,16 +387,12 @@ public enum CallSiteEffectInferrer {
     /// - `Foo<T>` → `"Foo"` (generic-specialization base peeled)
     /// - `A.B<T>` → `"B"`
     private static func typeIdentifierName(of expr: ExprSyntax) -> String? {
-        if let ref = expr.as(DeclReferenceExprSyntax.self) {
-            return ref.baseName.text
-        }
-        if let member = expr.as(MemberAccessExprSyntax.self) {
-            return member.declName.baseName.text
-        }
+        // Peel a generic specialization (`Foo<T>` → `Foo`) then recurse; the
+        // peeled expression is normally a plain reference / member access.
         if let spec = expr.as(GenericSpecializationExprSyntax.self) {
             return typeIdentifierName(of: spec.expression)
         }
-        return nil
+        return expr.referenceBaseName
     }
 
     /// Receiver-shape test shared by the logger/metric/codec heuristics:
