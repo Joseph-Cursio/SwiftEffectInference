@@ -399,14 +399,22 @@ public enum CallSiteEffectInferrer {
         return nil
     }
 
-    private static func isLoggerReceiver(_ name: String) -> Bool {
-        // Matches `logger`, `Logger`, `log`, `Log`, `os_log`, plus
-        // suffixed variants like `requestLogger`, `rootLogger`, etc.
-        // Kept conservative — the receiver name must *literally* contain
-        // "log" (case-insensitive) as a substring and be non-empty. This
-        // is intentionally loose on casing but tight on structure.
+    /// Receiver-shape test shared by the logger/metric/codec heuristics:
+    /// lowercases `name` and reports whether it *contains* any of `needles`
+    /// as a substring. The substring (not exact-match) policy is what lets
+    /// suffixed variants — `requestLogger`, `activeRequestMeter` — qualify.
+    /// `needles` must already be lowercased.
+    private static func isReceiver(_ name: String, matchingAnyOf needles: [String]) -> Bool {
         let lowered = name.lowercased()
-        return lowered.contains("log")
+        return needles.contains { lowered.contains($0) }
+    }
+
+    /// Matches `logger`, `Logger`, `log`, `Log`, `os_log`, plus suffixed
+    /// variants like `requestLogger`, `rootLogger`, etc. Kept conservative —
+    /// the receiver name must *literally* contain "log" (case-insensitive)
+    /// as a substring. Intentionally loose on casing but tight on structure.
+    private static func isLoggerReceiver(_ name: String) -> Bool {
+        isReceiver(name, matchingAnyOf: ["log"])
     }
 
     /// Matches swift-metrics primitive receivers and conventional siblings.
@@ -415,12 +423,7 @@ public enum CallSiteEffectInferrer {
     /// Round-12 follow-on — observationally absorbs metric mutations the
     /// same way the logger path absorbs log emissions.
     private static func isMetricReceiver(_ name: String) -> Bool {
-        let lowered = name.lowercased()
-        return lowered.contains("counter")
-            || lowered.contains("gauge")
-            || lowered.contains("meter")
-            || lowered.contains("timer")
-            || lowered.contains("recorder")
+        isReceiver(name, matchingAnyOf: ["counter", "gauge", "meter", "timer", "recorder"])
     }
 
     private static let metricObservationMethods: Set<String> = [
@@ -435,8 +438,7 @@ public enum CallSiteEffectInferrer {
     /// via lowercasing the whole name). Silences codec instances like
     /// `decoder.decode(...)` without needing a full type resolver.
     private static func isCodecReceiver(_ name: String) -> Bool {
-        let lowered = name.lowercased()
-        return lowered.contains("decoder") || lowered.contains("encoder")
+        isReceiver(name, matchingAnyOf: ["decoder", "encoder"])
     }
 
     private static let codecMethods: Set<String> = [
