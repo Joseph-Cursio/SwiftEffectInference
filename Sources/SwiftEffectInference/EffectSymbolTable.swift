@@ -273,13 +273,9 @@ public enum EffectProvenance: Sendable, Equatable {
 /// Collects every `FunctionDeclSyntax` in a source file. Unlike SPL's
 /// version, does not filter by `@lint.context` — the shared core only
 /// tracks effects.
-final class FunctionDeclCollector: SyntaxVisitor {
+final class FunctionDeclCollector: SourceAccurateSyntaxVisitor {
 
     var functions: [FunctionDeclSyntax] = []
-
-    init() {
-        super.init(viewMode: .sourceAccurate)
-    }
 
     override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
         functions.append(node)
@@ -290,13 +286,9 @@ final class FunctionDeclCollector: SyntaxVisitor {
 /// Collects closure-typed property declarations that participate in the
 /// pseudo-method registration path (`var search: @Sendable () -> Void`,
 /// `let handler = { ... }`).
-final class ClosurePropertyDeclCollector: SyntaxVisitor {
+final class ClosurePropertyDeclCollector: SourceAccurateSyntaxVisitor {
 
     var properties: [VariableDeclSyntax] = []
-
-    init() {
-        super.init(viewMode: .sourceAccurate)
-    }
 
     override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
         properties.append(node)

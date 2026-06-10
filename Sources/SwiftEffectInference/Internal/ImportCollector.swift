@@ -32,13 +32,13 @@ public enum ImportCollector {
     /// statically true. Conservative by design: under-including imports
     /// could produce false-positive classifications in gated code.
     public static func imports(in source: SourceFileSyntax) -> Set<String> {
-        let visitor = ImportVisitor(viewMode: .sourceAccurate)
+        let visitor = ImportVisitor()
         visitor.walk(source)
         return visitor.modules
     }
 }
 
-private final class ImportVisitor: SyntaxVisitor {
+private final class ImportVisitor: SourceAccurateSyntaxVisitor {
     var modules: Set<String> = []
 
     override func visit(_ node: ImportDeclSyntax) -> SyntaxVisitorContinueKind {

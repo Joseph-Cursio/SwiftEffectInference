@@ -183,16 +183,12 @@ public enum BodyEffectInferrer {
 /// calculation happens separately via `collectResults`, which enforces the
 /// escape-closure policy at the right granularity. Subclasses add only their
 /// concrete-typed `visit(_:)` and the collection they accumulate into.
-///
-/// A shared base (rather than a generic collector) is required because
-/// `SyntaxVisitor` dispatches to concrete-typed `visit(_:)` overrides; a
-/// generic `visit(_ node: Node)` would match none of them.
-class UnannotatedDeclCollector: SyntaxVisitor {
+class UnannotatedDeclCollector: SourceAccurateSyntaxVisitor {
     let parser: EffectAnnotationParser
 
     init(parser: EffectAnnotationParser) {
         self.parser = parser
-        super.init(viewMode: .sourceAccurate)
+        super.init()
     }
 
     override func visit(_ node: ClosureExprSyntax) -> SyntaxVisitorContinueKind {
