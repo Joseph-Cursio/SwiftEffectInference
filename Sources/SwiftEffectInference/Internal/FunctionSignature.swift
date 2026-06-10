@@ -87,10 +87,9 @@ public extension FunctionSignature {
     static func from(declaration: VariableDeclSyntax) -> FunctionSignature? {
         guard let binding = declaration.bindings.first,
               declaration.bindings.count == 1,
-              let pattern = binding.pattern.as(IdentifierPatternSyntax.self) else {
+              let name = binding.boundName else {
             return nil
         }
-        let name = pattern.identifier.text
 
         // Primary path: explicit function-typed annotation. Preserves Path A
         // re-labelling for the macro-friendly `@DependencyClient`-style shape.

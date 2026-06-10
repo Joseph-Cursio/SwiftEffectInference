@@ -112,9 +112,10 @@ public struct EffectAnnotationParser: Sendable {
     /// When both attribute and doc-comment forms agree, that effect is
     /// returned. When they disagree, returns `nil` (collision-withdraw).
     public func parseEffect(declaration: FunctionDeclSyntax) -> Effect? {
-        let attributeEffect = effectFromAttributes(declaration.attributes)
-        let docCommentEffect = parseEffect(leadingTrivia: Self.combinedDocTrivia(for: declaration))
-        return Self.resolveEffectSignals(attribute: attributeEffect, docComment: docCommentEffect)
+        resolveDeclEffect(
+            attributes: declaration.attributes,
+            docTrivia: Self.combinedDocTrivia(for: declaration)
+        )
     }
 
     /// Same combined-position parsing for variable bindings. A
@@ -122,8 +123,23 @@ public struct EffectAnnotationParser: Sendable {
     /// initializer is a closure literal (handler-style code); the parser
     /// is content-blind and returns whatever annotation is present.
     public func parseEffect(declaration: VariableDeclSyntax) -> Effect? {
-        let attributeEffect = effectFromAttributes(declaration.attributes)
-        let docCommentEffect = parseEffect(leadingTrivia: Self.combinedDocTrivia(for: declaration))
+        resolveDeclEffect(
+            attributes: declaration.attributes,
+            docTrivia: Self.combinedDocTrivia(for: declaration)
+        )
+    }
+
+    /// Shared body for the two `parseEffect(declaration:)` overloads. Both
+    /// decl kinds combine an attribute-form signal with a doc-comment signal
+    /// and resolve them identically; they differ only in how the attribute
+    /// list and combined doc trivia are extracted (handled by the callers'
+    /// overloaded accessors).
+    private func resolveDeclEffect(
+        attributes: AttributeListSyntax,
+        docTrivia: Trivia
+    ) -> Effect? {
+        let attributeEffect = effectFromAttributes(attributes)
+        let docCommentEffect = parseEffect(leadingTrivia: docTrivia)
         return Self.resolveEffectSignals(attribute: attributeEffect, docComment: docCommentEffect)
     }
 

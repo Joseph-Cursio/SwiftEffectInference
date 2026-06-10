@@ -38,10 +38,18 @@ extension VariableDeclSyntax {
     /// for multi-binding decls or non-identifier patterns (tuple patterns,
     /// wildcards, etc.).
     package var firstBindingName: String? {
-        guard bindings.count == 1,
-              let pattern = bindings.first?.pattern.as(IdentifierPatternSyntax.self)
-        else { return nil }
-        return pattern.identifier.text
+        guard bindings.count == 1 else { return nil }
+        return bindings.first?.boundName
+    }
+}
+
+extension PatternBindingSyntax {
+    /// The simple bound identifier of this binding (`let x = …` → `"x"`),
+    /// or `nil` when the binding's pattern is not a plain identifier
+    /// (tuple, wildcard, etc.). Shared by every walker that matches a
+    /// binding against a target name.
+    package var boundName: String? {
+        pattern.as(IdentifierPatternSyntax.self)?.identifier.text
     }
 }
 

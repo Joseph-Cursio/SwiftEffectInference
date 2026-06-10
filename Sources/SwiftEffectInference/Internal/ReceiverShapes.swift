@@ -115,16 +115,23 @@ public enum ReceiverShapes {
     private static func constructorTypeName(of call: FunctionCallExprSyntax) -> String? {
         // `TypeName()` — direct identifier callee, type names start uppercase.
         if let ref = call.calledExpression.as(DeclReferenceExprSyntax.self) {
-            let name = ref.baseName.text
-            return name.first?.isUppercase == true ? name : nil
+            return uppercaseTypeName(of: ref)
         }
         // `TypeName<Generics>()` — generic-specialization wraps an identifier.
         if let gen = call.calledExpression.as(GenericSpecializationExprSyntax.self),
            let ref = gen.expression.as(DeclReferenceExprSyntax.self) {
-            let name = ref.baseName.text
-            return name.first?.isUppercase == true ? name : nil
+            return uppercaseTypeName(of: ref)
         }
         return nil
+    }
+
+    /// The reference's base name when it looks like a type name (starts with
+    /// an uppercase letter), else `nil`. The uppercase test is the only
+    /// signal available to tell a constructor call (`Queue()`) from a
+    /// free-function call (`doThing()`) without type resolution.
+    private static func uppercaseTypeName(of ref: DeclReferenceExprSyntax) -> String? {
+        let name = ref.baseName.text
+        return name.first?.isUppercase == true ? name : nil
     }
 
     // MARK: - Identifier resolution (parameter / local binding / stored property)
@@ -210,8 +217,7 @@ public enum ReceiverShapes {
             if statement.position.utf8Offset >= position.utf8Offset { break }
             guard let varDecl = statement.item.as(VariableDeclSyntax.self) else { continue }
             for binding in varDecl.bindings {
-                guard let pattern = binding.pattern.as(IdentifierPatternSyntax.self),
-                      pattern.identifier.text == name else { continue }
+                guard binding.boundName == name else { continue }
                 // Typed binding: the annotation is authoritative.
                 if let annotation = binding.typeAnnotation {
                     return classifyTypeSyntax(annotation.type, localTypes: localTypes)
@@ -284,8 +290,7 @@ public enum ReceiverShapes {
         for member in members {
             guard let varDecl = member.decl.as(VariableDeclSyntax.self) else { continue }
             for binding in varDecl.bindings {
-                guard let pattern = binding.pattern.as(IdentifierPatternSyntax.self),
-                      pattern.identifier.text == name,
+                guard binding.boundName == name,
                       let typeAnnotation = binding.typeAnnotation else { continue }
                 return typeAnnotation.type
             }

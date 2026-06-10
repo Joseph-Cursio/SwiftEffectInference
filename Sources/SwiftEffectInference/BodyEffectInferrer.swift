@@ -107,50 +107,19 @@ public enum BodyEffectInferrer {
     }
 
     private static func combine(calleeResults: [BodyInference]) -> BodyInference? {
-        guard let lub = leastUpperBound(of: calleeResults.map { $0.effect }) else {
+        // `Effect.lub(of:)` is the single source of truth for the lattice
+        // ordering and its tie-break semantics (first occurrence of the
+        // highest rank wins). The depth filter below reuses the same
+        // `Effect.rank` so depth and lub can never disagree about ordering.
+        guard let lub = Effect.lub(of: calleeResults.map { $0.effect }) else {
             return nil
         }
-        let lubRank = rank(of: lub)
+        let lubRank = lub.rank
         let contributingDepths = calleeResults
-            .filter { rank(of: $0.effect) == lubRank }
+            .filter { $0.effect.rank == lubRank }
             .map { $0.depth }
         let depth = 1 + (contributingDepths.max() ?? 0)
         return BodyInference(effect: lub, depth: depth)
-    }
-
-    /// Returns the single effect corresponding to the most permissive
-    /// element of the input collection, per the lattice ordering. Nil when
-    /// the input is empty (no call-site evidence available).
-    ///
-    /// Ordering (strictest first): `observational < idempotent < externally_idempotent < non_idempotent`.
-    ///
-    /// Tie-break note: comparison is rank-strict (`>`), so when two inputs
-    /// share the highest rank the first one in iteration order wins. This
-    /// matters for `externallyIdempotent(keyParameter:)` — two values with
-    /// different `keyParameter` strings sit at the same lattice position,
-    /// and lub returns whichever appeared first. The result is always
-    /// rank-correct, but is not Equatable-symmetric across input orderings
-    /// when same-rank duplicates carry different associated values. See
-    /// `LatticeLawsTests` for the property-based laws this guarantees.
-    static func leastUpperBound(of effects: [Effect]) -> Effect? {
-        guard !effects.isEmpty else { return nil }
-        var best: (rank: Int, effect: Effect) = (-1, .observational)
-        for effect in effects {
-            let currentRank = rank(of: effect)
-            if currentRank > best.rank {
-                best = (currentRank, effect)
-            }
-        }
-        return best.rank >= 0 ? best.effect : nil
-    }
-
-    private static func rank(of effect: Effect) -> Int {
-        switch effect {
-        case .observational: return 0
-        case .idempotent: return 1
-        case .externallyIdempotent: return 2
-        case .nonIdempotent: return 3
-        }
     }
 
     private static func collectResults(
