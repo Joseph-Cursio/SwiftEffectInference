@@ -38,7 +38,11 @@ let package = Package(
         ),
         .testTarget(
             name: "SwiftEffectInferenceTests",
-            dependencies: ["SwiftEffectInference"]
+            dependencies: [
+                "SwiftEffectInference",
+                .product(name: "SwiftSyntax", package: "swift-syntax"),
+                .product(name: "SwiftParser", package: "swift-syntax")
+            ]
         )
     ]
 )

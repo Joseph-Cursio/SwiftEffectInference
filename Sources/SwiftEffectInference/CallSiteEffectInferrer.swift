@@ -117,6 +117,41 @@ public enum CallSiteEffectInferrer {
         imports: Set<String> = [],
         enabledFrameworks: Set<String>? = nil
     ) -> Effect? {
+        resolve(call: call, imports: imports, enabledFrameworks: enabledFrameworks)?.effect
+    }
+
+    /// Human-readable reason string describing why a particular effect was
+    /// inferred. Used in diagnostic prose so the user can see what the
+    /// linter matched against. Same argument semantics as
+    /// `infer(call:imports:enabledFrameworks:)`.
+    public static func inferenceReason(
+        for call: FunctionCallExprSyntax,
+        imports: Set<String> = [],
+        enabledFrameworks: Set<String>? = nil
+    ) -> String? {
+        resolve(call: call, imports: imports, enabledFrameworks: enabledFrameworks)?.reason
+    }
+
+    // MARK: - Private
+
+    /// The effect inferred for a call site, paired with the human-readable
+    /// reason crediting which heuristic fired. `infer` and `inferenceReason`
+    /// are thin projections of this single source of truth, so the effect
+    /// and its explanation can never disagree about which rule matched.
+    private struct Inference {
+        let effect: Effect
+        let reason: String
+    }
+
+    /// Walks the inference decision tree once and yields the matched
+    /// `(effect, reason)`, or `nil` when no heuristic applies. The rule
+    /// ordering is significant — earlier, higher-precision signals win over
+    /// later, broader ones.
+    private static func resolve(
+        call: FunctionCallExprSyntax,
+        imports: Set<String>,
+        enabledFrameworks: Set<String>?
+    ) -> Inference? {
         guard let (calleeName, receiverName) = callParts(of: call.calledExpression) else {
             return nil
         }
@@ -134,7 +169,10 @@ public enum CallSiteEffectInferrer {
         if let receiverName,
            isLoggerReceiver(receiverName),
            loggerLevelMethods.contains(calleeName) {
-            return .observational
+            return Inference(
+                effect: .observational,
+                reason: "from logger-shaped receiver `\(receiverName).\(calleeName)`"
+            )
         }
 
         // Metric primitives (swift-metrics + observational-by-convention
@@ -144,7 +182,10 @@ public enum CallSiteEffectInferrer {
            isMetricReceiver(receiverName),
            metricObservationMethods.contains(calleeName),
            context.isFrameworkActive(FrameworkGates.metrics) {
-            return .observational
+            return Inference(
+                effect: .observational,
+                reason: "from metric-primitive receiver `\(receiverName).\(calleeName)`"
+            )
         }
 
         // Type-constructor whitelist — per-framework groups. When
@@ -154,7 +195,10 @@ public enum CallSiteEffectInferrer {
                forIdempotentTypeConstructor: calleeName
            ),
            context.isFrameworkActive(framework) {
-            return .idempotent
+            return Inference(
+                effect: .idempotent,
+                reason: "from the known-idempotent \(framework) type `\(calleeName)`"
+            )
         }
 
         // Codec-pattern method whitelist. Gated on `Foundation` import
@@ -163,7 +207,10 @@ public enum CallSiteEffectInferrer {
            isCodecReceiver(receiverName),
            codecMethods.contains(calleeName),
            context.isFrameworkActive(FrameworkGates.foundation) {
-            return .idempotent
+            return Inference(
+                effect: .idempotent,
+                reason: "from codec-pattern receiver `\(receiverName).\(calleeName)`"
+            )
         }
 
         // Framework-gated idempotent (receiver, method) pairs —
@@ -176,7 +223,10 @@ public enum CallSiteEffectInferrer {
                method: calleeName
            ),
            context.isFrameworkActive(framework) {
-            return .idempotent
+            return Inference(
+                effect: .idempotent,
+                reason: "from the \(framework) primitive `\(receiverName).\(calleeName)`"
+            )
         }
 
         // Cross-framework idempotent (receiver, method) pairs (slot 18).
@@ -189,8 +239,11 @@ public enum CallSiteEffectInferrer {
                forCrossFrameworkIdempotentReceiver: receiverName,
                method: calleeName
            ),
-           candidates.contains(where: context.isFrameworkActive) {
-            return .idempotent
+           let active = candidates.first(where: context.isFrameworkActive) {
+            return Inference(
+                effect: .idempotent,
+                reason: "from the \(active) primitive `\(receiverName).\(calleeName)`"
+            )
         }
 
         // Framework-gated bare-name overrides of the non-idempotent list.
@@ -205,28 +258,26 @@ public enum CallSiteEffectInferrer {
                forBareNameIdempotentOverride: calleeName
            ),
            context.isFrameworkActive(framework) {
-            return .idempotent
+            return Inference(
+                effect: .idempotent,
+                reason: "from the \(framework) closure-parameter primitive `\(calleeName)`"
+            )
         }
 
         // Bare-name whitelists — now receiver-type gated. If the receiver
         // resolves to a stdlib collection whose (type, method) pair is in
         // the exclusion table, the bare-name match is suppressed. Named
         // and unresolved receivers fall through to the original behaviour.
-        let onWhitelist = idempotentNames.contains(calleeName)
-            || nonIdempotentNames.contains(calleeName)
-        if onWhitelist,
-           StdlibIdempotentMutations.isExcluded(
-               receiver: ReceiverShapes.resolve(receiverOf: call),
-               method: calleeName
-           ) {
-            return nil
-        }
-
-        if idempotentNames.contains(calleeName) {
-            return .idempotent
-        }
-        if nonIdempotentNames.contains(calleeName) {
-            return .nonIdempotent
+        if idempotentNames.contains(calleeName) || nonIdempotentNames.contains(calleeName) {
+            if StdlibIdempotentMutations.isExcluded(
+                receiver: ReceiverShapes.resolve(receiverOf: call),
+                method: calleeName
+            ) {
+                return nil
+            }
+            // Both whitelists credit the bare callee name identically.
+            let effect: Effect = idempotentNames.contains(calleeName) ? .idempotent : .nonIdempotent
+            return Inference(effect: effect, reason: "from the callee name `\(calleeName)`")
         }
 
         // Framework-gated idempotent methods. No receiver requirement:
@@ -240,7 +291,11 @@ public enum CallSiteEffectInferrer {
                forIdempotentMethod: calleeName
            ),
            context.isFrameworkActive(framework) {
-            return .idempotent
+            let phrase = FrameworkGates.idempotentMethodPhrasing(forFramework: framework)
+            return Inference(
+                effect: .idempotent,
+                reason: "from the \(framework) \(phrase) `\(calleeName)`"
+            )
         }
 
         // Framework-gated non-idempotent methods (Fluent's save/update/delete).
@@ -252,7 +307,10 @@ public enum CallSiteEffectInferrer {
                forNonIdempotentMethod: calleeName
            ),
            context.isFrameworkActive(framework) {
-            return .nonIdempotent
+            return Inference(
+                effect: .nonIdempotent,
+                reason: "from the \(framework) ORM verb `\(calleeName)`"
+            )
         }
 
         // Camel-case-gated prefix match for non-idempotent verbs.
@@ -260,114 +318,18 @@ public enum CallSiteEffectInferrer {
         //   - `sending`, `sender`, `publisher`, `appending` (lowercase next)
         //   - `Array.sendAnything` and friends (stdlib-collection receiver)
         // See `matchesNonIdempotentPrefix` for the exact rules.
-        if matchesNonIdempotentPrefix(calleeName) != nil {
-            if case .stdlibCollection = ReceiverShapes.resolve(receiverOf: call) {
-                return nil
-            }
-            return .nonIdempotent
-        }
-
-        return nil
-    }
-
-    /// Human-readable reason string describing why a particular effect was
-    /// inferred. Used in diagnostic prose so the user can see what the
-    /// linter matched against. Same argument semantics as
-    /// `infer(call:imports:enabledFrameworks:)`.
-    public static func inferenceReason(
-        for call: FunctionCallExprSyntax,
-        imports: Set<String> = [],
-        enabledFrameworks: Set<String>? = nil
-    ) -> String? {
-        guard let (calleeName, receiverName) = callParts(of: call.calledExpression) else {
-            return nil
-        }
-        let context = FrameworkContext(imports: imports, enabled: enabledFrameworks)
-
-        if let receiverName,
-           isLoggerReceiver(receiverName),
-           loggerLevelMethods.contains(calleeName) {
-            return "from logger-shaped receiver `\(receiverName).\(calleeName)`"
-        }
-        if let receiverName,
-           isMetricReceiver(receiverName),
-           metricObservationMethods.contains(calleeName),
-           context.isFrameworkActive(FrameworkGates.metrics) {
-            return "from metric-primitive receiver `\(receiverName).\(calleeName)`"
-        }
-        if receiverName == nil,
-           let framework = FrameworkGates.framework(
-               forIdempotentTypeConstructor: calleeName
-           ),
-           context.isFrameworkActive(framework) {
-            return "from the known-idempotent \(framework) type `\(calleeName)`"
-        }
-        if let receiverName,
-           isCodecReceiver(receiverName),
-           codecMethods.contains(calleeName),
-           context.isFrameworkActive(FrameworkGates.foundation) {
-            return "from codec-pattern receiver `\(receiverName).\(calleeName)`"
-        }
-        if let receiverName,
-           let framework = FrameworkGates.framework(
-               forIdempotentReceiver: receiverName,
-               method: calleeName
-           ),
-           context.isFrameworkActive(framework) {
-            return "from the \(framework) primitive `\(receiverName).\(calleeName)`"
-        }
-        if let receiverName,
-           let candidates = FrameworkGates.frameworks(
-               forCrossFrameworkIdempotentReceiver: receiverName,
-               method: calleeName
-           ),
-           let active = candidates.first(where: context.isFrameworkActive) {
-            return "from the \(active) primitive `\(receiverName).\(calleeName)`"
-        }
-        if receiverName == nil,
-           let framework = FrameworkGates.framework(
-               forBareNameIdempotentOverride: calleeName
-           ),
-           context.isFrameworkActive(framework) {
-            return "from the \(framework) closure-parameter primitive `\(calleeName)`"
-        }
-        if idempotentNames.contains(calleeName) || nonIdempotentNames.contains(calleeName) {
-            // Receiver-type-excluded pairs produce no reason, mirroring
-            // `infer(call:)` which returns nil in the same case.
-            if StdlibIdempotentMutations.isExcluded(
-                receiver: ReceiverShapes.resolve(receiverOf: call),
-                method: calleeName
-            ) {
-                return nil
-            }
-            return "from the callee name `\(calleeName)`"
-        }
-        if receiverName != nil,
-           let framework = FrameworkGates.framework(
-               forNonIdempotentMethod: calleeName
-           ),
-           context.isFrameworkActive(framework) {
-            return "from the \(framework) ORM verb `\(calleeName)`"
-        }
-        if let framework = FrameworkGates.framework(
-               forIdempotentMethod: calleeName
-           ),
-           context.isFrameworkActive(framework) {
-            let phrase = FrameworkGates.idempotentMethodPhrasing(forFramework: framework)
-            return "from the \(framework) \(phrase) `\(calleeName)`"
-        }
-        // Prefix-matched calls credit the matched verb explicitly so the
-        // user can see which heuristic fired and why.
         if let prefix = matchesNonIdempotentPrefix(calleeName) {
             if case .stdlibCollection = ReceiverShapes.resolve(receiverOf: call) {
                 return nil
             }
-            return "from the callee-name prefix `\(prefix)` (in `\(calleeName)`)"
+            return Inference(
+                effect: .nonIdempotent,
+                reason: "from the callee-name prefix `\(prefix)` (in `\(calleeName)`)"
+            )
         }
+
         return nil
     }
-
-    // MARK: - Private
 
     /// Extracts `(calleeName, receiverName?)` from a call's called-expression.
     ///
