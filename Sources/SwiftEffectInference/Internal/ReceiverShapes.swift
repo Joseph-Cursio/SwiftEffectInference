@@ -77,24 +77,10 @@ public enum ReceiverShapes {
         _ expr: ExprSyntax,
         localTypes: Set<String> = []
     ) -> ResolvedReceiverType {
-        // Layer 1: literal shapes.
-        if expr.is(ArrayExprSyntax.self) {
-            return classifyTypeName("Array", localTypes: localTypes)
-        }
-        if expr.is(DictionaryExprSyntax.self) {
-            return classifyTypeName("Dictionary", localTypes: localTypes)
-        }
-        if expr.is(StringLiteralExprSyntax.self) {
-            return classifyTypeName("String", localTypes: localTypes)
-        }
-        if expr.is(NilLiteralExprSyntax.self) {
-            return classifyTypeName("Optional", localTypes: localTypes)
-        }
-
-        // Layer 2: constructor call. `Queue()`, `Array<Int>()`, `UUID()`.
-        if let call = expr.as(FunctionCallExprSyntax.self),
-           let typeName = constructorTypeName(of: call) {
-            return classifyTypeName(typeName, localTypes: localTypes)
+        // Layers 1 & 2: literal shapes (`[...]`, `[:]`, `"..."`, `nil`) and
+        // constructor calls (`Queue()`, `Array<Int>()`, `UUID()`).
+        if let shape = literalOrConstructorShape(expr, localTypes: localTypes) {
+            return shape
         }
 
         // Layer 3: `self.<name>` member access. Look up the stored property
@@ -191,20 +177,8 @@ public enum ReceiverShapes {
             }
 
             // Stored properties of enclosing type decls.
-            if let cls = node.as(ClassDeclSyntax.self),
-               let typeSyntax = storedPropertyType(named: name, in: cls.memberBlock.members) {
-                return classifyTypeSyntax(typeSyntax, localTypes: localTypes)
-            }
-            if let str = node.as(StructDeclSyntax.self),
-               let typeSyntax = storedPropertyType(named: name, in: str.memberBlock.members) {
-                return classifyTypeSyntax(typeSyntax, localTypes: localTypes)
-            }
-            if let act = node.as(ActorDeclSyntax.self),
-               let typeSyntax = storedPropertyType(named: name, in: act.memberBlock.members) {
-                return classifyTypeSyntax(typeSyntax, localTypes: localTypes)
-            }
-            if let ext = node.as(ExtensionDeclSyntax.self),
-               let typeSyntax = storedPropertyType(named: name, in: ext.memberBlock.members) {
+            if let members = memberBlockMembers(of: node),
+               let typeSyntax = storedPropertyType(named: name, in: members) {
                 return classifyTypeSyntax(typeSyntax, localTypes: localTypes)
             }
 
@@ -244,7 +218,7 @@ public enum ReceiverShapes {
                 }
                 // Untyped binding: classify the initializer's surface shape.
                 if let initExpr = binding.initializer?.value {
-                    if let shape = initializerShape(initExpr, localTypes: localTypes) {
+                    if let shape = literalOrConstructorShape(initExpr, localTypes: localTypes) {
                         return shape
                     }
                 }
@@ -256,10 +230,13 @@ public enum ReceiverShapes {
         return nil
     }
 
-    /// Classifies an initializer expression at face value. Literals and
-    /// constructor calls resolve directly; anything else is unresolvable
-    /// without chasing further, which this layer deliberately doesn't do.
-    private static func initializerShape(_ expr: ExprSyntax, localTypes: Set<String>) -> ResolvedReceiverType? {
+    /// Classifies an expression at face value by its literal or constructor
+    /// surface shape. Array/dictionary/string/nil literals and constructor
+    /// calls resolve directly; anything else returns `nil` — this layer
+    /// deliberately doesn't chase further. Shared by `resolve` (layers 1 & 2,
+    /// where the expression is the receiver) and `localBinding` (where it's
+    /// an untyped binding's initializer).
+    private static func literalOrConstructorShape(_ expr: ExprSyntax, localTypes: Set<String>) -> ResolvedReceiverType? {
         if expr.is(ArrayExprSyntax.self) { return classifyTypeName("Array", localTypes: localTypes) }
         if expr.is(DictionaryExprSyntax.self) { return classifyTypeName("Dictionary", localTypes: localTypes) }
         if expr.is(StringLiteralExprSyntax.self) { return classifyTypeName("String", localTypes: localTypes) }
@@ -279,24 +256,24 @@ public enum ReceiverShapes {
     ) -> TypeSyntax? {
         var current: Syntax? = startNode.parent
         while let node = current {
-            if let cls = node.as(ClassDeclSyntax.self),
-               let typeSyntax = storedPropertyType(named: name, in: cls.memberBlock.members) {
-                return typeSyntax
-            }
-            if let str = node.as(StructDeclSyntax.self),
-               let typeSyntax = storedPropertyType(named: name, in: str.memberBlock.members) {
-                return typeSyntax
-            }
-            if let act = node.as(ActorDeclSyntax.self),
-               let typeSyntax = storedPropertyType(named: name, in: act.memberBlock.members) {
-                return typeSyntax
-            }
-            if let ext = node.as(ExtensionDeclSyntax.self),
-               let typeSyntax = storedPropertyType(named: name, in: ext.memberBlock.members) {
+            if let members = memberBlockMembers(of: node),
+               let typeSyntax = storedPropertyType(named: name, in: members) {
                 return typeSyntax
             }
             current = node.parent
         }
+        return nil
+    }
+
+    /// Returns the member list for the four type-declaration kinds that can
+    /// hold stored properties — `class`, `struct`, `actor`, `extension` —
+    /// or `nil` for any other node. `enum` is deliberately excluded: it has
+    /// a `memberBlock` but no stored properties to resolve a receiver against.
+    private static func memberBlockMembers(of node: Syntax) -> MemberBlockItemListSyntax? {
+        if let cls = node.as(ClassDeclSyntax.self) { return cls.memberBlock.members }
+        if let str = node.as(StructDeclSyntax.self) { return str.memberBlock.members }
+        if let act = node.as(ActorDeclSyntax.self) { return act.memberBlock.members }
+        if let ext = node.as(ExtensionDeclSyntax.self) { return ext.memberBlock.members }
         return nil
     }
 
