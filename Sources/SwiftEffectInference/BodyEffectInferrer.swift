@@ -218,6 +218,29 @@ public enum BodyEffectInferrer {
     ]
 }
 
+/// Shared scaffolding for the unannotated-declaration collectors below.
+/// Holds the parser used to test for a declared `@lint.effect` annotation
+/// and skips descent into closure expressions — the body walk for the lub
+/// calculation happens separately via `collectResults`, which enforces the
+/// escape-closure policy at the right granularity. Subclasses add only their
+/// concrete-typed `visit(_:)` and the collection they accumulate into.
+///
+/// A shared base (rather than a generic collector) is required because
+/// `SyntaxVisitor` dispatches to concrete-typed `visit(_:)` overrides; a
+/// generic `visit(_ node: Node)` would match none of them.
+class UnannotatedDeclCollector: SyntaxVisitor {
+    let parser: EffectAnnotationParser
+
+    init(parser: EffectAnnotationParser) {
+        self.parser = parser
+        super.init(viewMode: .sourceAccurate)
+    }
+
+    override func visit(_ node: ClosureExprSyntax) -> SyntaxVisitorContinueKind {
+        .skipChildren
+    }
+}
+
 /// Collects every `VariableDeclSyntax` with a closure-literal initialiser
 /// that has no `@lint.effect` annotation. Paired with
 /// `UnannotatedFunctionCollector` for upward inference: a closure binding
@@ -225,20 +248,11 @@ public enum BodyEffectInferrer {
 /// non-idempotent, surfacing cross-reference violations that would
 /// otherwise stay silent.
 ///
-/// The collector skips descent into closure expressions — the body walk
-/// for the lub calculation happens separately via `collectResults`, which
-/// enforces the escape-closure policy at the right granularity.
 /// `@lint.context`-only bindings are still collected (context-only decls
 /// can have their body's effect inferred); the check is specifically on
 /// the presence of a declared *effect* annotation.
-final class UnannotatedClosureBindingCollector: SyntaxVisitor {
+final class UnannotatedClosureBindingCollector: UnannotatedDeclCollector {
     var bindings: [VariableDeclSyntax] = []
-    private let parser: EffectAnnotationParser
-
-    init(parser: EffectAnnotationParser) {
-        self.parser = parser
-        super.init(viewMode: .sourceAccurate)
-    }
 
     override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
         if node.closureInitializer != nil,
@@ -247,32 +261,18 @@ final class UnannotatedClosureBindingCollector: SyntaxVisitor {
         }
         return .visitChildren
     }
-
-    override func visit(_ node: ClosureExprSyntax) -> SyntaxVisitorContinueKind {
-        .skipChildren
-    }
 }
 
 /// Collects every un-annotated `FunctionDeclSyntax` in a source file.
 /// Annotated decls already have declared effects; inferring would be
 /// redundant or could contradict the user's explicit choice.
-final class UnannotatedFunctionCollector: SyntaxVisitor {
+final class UnannotatedFunctionCollector: UnannotatedDeclCollector {
     var functions: [FunctionDeclSyntax] = []
-    private let parser: EffectAnnotationParser
-
-    init(parser: EffectAnnotationParser) {
-        self.parser = parser
-        super.init(viewMode: .sourceAccurate)
-    }
 
     override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
         if parser.parseEffect(declaration: node) == nil {
             functions.append(node)
         }
         return .visitChildren
-    }
-
-    override func visit(_ node: ClosureExprSyntax) -> SyntaxVisitorContinueKind {
-        .skipChildren
     }
 }
