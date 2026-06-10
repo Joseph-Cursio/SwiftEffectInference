@@ -162,31 +162,47 @@ public struct EffectAnnotationParser: Sendable {
     /// Combines trivia from every position in a function declaration's
     /// header where a user-authored doc comment can legitimately sit.
     static func combinedDocTrivia(for decl: FunctionDeclSyntax) -> Trivia {
-        var pieces: [TriviaPiece] = []
-        pieces.append(contentsOf: decl.leadingTrivia)
-        for attribute in decl.attributes {
-            pieces.append(contentsOf: attribute.leadingTrivia)
-            pieces.append(contentsOf: attribute.trailingTrivia)
-        }
-        for modifier in decl.modifiers {
-            pieces.append(contentsOf: modifier.leadingTrivia)
-        }
-        pieces.append(contentsOf: decl.funcKeyword.leadingTrivia)
-        return Trivia(pieces: pieces)
+        combinedDocTrivia(
+            leadingTrivia: decl.leadingTrivia,
+            attributes: decl.attributes,
+            modifiers: decl.modifiers,
+            // The declaration keyword closes the header; its leading trivia
+            // is the last place a doc comment can sit before the signature.
+            keywordLeadingTrivia: decl.funcKeyword.leadingTrivia
+        )
     }
 
     /// Same combining strategy for variable declarations.
     static func combinedDocTrivia(for decl: VariableDeclSyntax) -> Trivia {
+        combinedDocTrivia(
+            leadingTrivia: decl.leadingTrivia,
+            attributes: decl.attributes,
+            modifiers: decl.modifiers,
+            keywordLeadingTrivia: decl.bindingSpecifier.leadingTrivia
+        )
+    }
+
+    /// Shared core for the `combinedDocTrivia` overloads. The two decl kinds
+    /// differ only in which token closes the header (`func` vs `let`/`var`),
+    /// supplied as `keywordLeadingTrivia`; everything before it — the
+    /// declaration's own leading trivia, attribute trivia, and modifier
+    /// leading trivia — combines identically.
+    private static func combinedDocTrivia(
+        leadingTrivia: Trivia,
+        attributes: AttributeListSyntax,
+        modifiers: DeclModifierListSyntax,
+        keywordLeadingTrivia: Trivia
+    ) -> Trivia {
         var pieces: [TriviaPiece] = []
-        pieces.append(contentsOf: decl.leadingTrivia)
-        for attribute in decl.attributes {
+        pieces.append(contentsOf: leadingTrivia)
+        for attribute in attributes {
             pieces.append(contentsOf: attribute.leadingTrivia)
             pieces.append(contentsOf: attribute.trailingTrivia)
         }
-        for modifier in decl.modifiers {
+        for modifier in modifiers {
             pieces.append(contentsOf: modifier.leadingTrivia)
         }
-        pieces.append(contentsOf: decl.bindingSpecifier.leadingTrivia)
+        pieces.append(contentsOf: keywordLeadingTrivia)
         return Trivia(pieces: pieces)
     }
 
