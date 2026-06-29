@@ -304,6 +304,22 @@ public struct EffectAnnotationParser: Sendable {
             return .externallyIdempotent(keyParameter: extractByQualifier(from: afterToken))
         case "non_idempotent":
             return .nonIdempotent
+        case "transactional_idempotent":
+            // `transactional_idempotent` is a tier in SwiftIdempotency's
+            // *non-linear* lattice — it sits parallel to (and incomparable
+            // with) `externallyIdempotent`: both are conditionally idempotent
+            // via an external mechanism (a transaction boundary vs. a dedup
+            // key). SEI's `Effect` is a deliberately *linear* chain (see the
+            // decision note on `Effect`), so the tier is not modelled as its
+            // own case. We still recognize the doc-comment spelling rather
+            // than silently dropping it, and project it conservatively onto
+            // `.nonIdempotent`: without verifying the transaction boundary
+            // (which needs the `@lint.txn_boundary` companion SwiftIdempotency
+            // requires, and which SEI does not analyse), the sound assumption
+            // is that the individually-non-idempotent effects re-fire on
+            // replay. This matches SwiftIdempotency's own strict-mode
+            // `transactional_idempotent → non_idempotent` degradation.
+            return .nonIdempotent
         default:
             return nil
         }

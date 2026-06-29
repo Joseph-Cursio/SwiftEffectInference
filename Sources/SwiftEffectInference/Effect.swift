@@ -32,6 +32,33 @@
 /// lattice ordering is rank-only — `lub(_:)` ignores key-parameter values
 /// for cross-rank cases and uses left-bias for same-rank ties.
 ///
+/// **Why this is a linear chain (and what's deliberately omitted).**
+/// SwiftIdempotency's reference lattice is a *non-linear partial order* with
+/// two extra elements SEI does not model:
+///
+/// ```
+/// pure < {idempotent, observational} < {transactional_idempotent, externallyIdempotent} < non_idempotent
+///                                                                                 unknown (incomparable)
+/// ```
+///
+/// - `transactional_idempotent` (individually non-idempotent effects that
+///   commit atomically inside a transaction) sits *parallel* to
+///   `externallyIdempotent` — incomparable to it, since one relies on a
+///   transaction boundary and the other on a caller-supplied dedup key.
+/// - `unknown` is incomparable to `non_idempotent`.
+///
+/// Modelling either would force this chain into a genuine partial order and
+/// replace the rank-only `lub(_:)` with a Hasse-diagram join — a substantial
+/// change to the core algebra for tiers **no current consumer reads**.
+/// `transactional_idempotent` is, by SwiftIdempotency's own design, a
+/// doc-comment-only tier requiring a `@lint.txn_boundary` companion and
+/// transaction-boundary verification that neither a macro nor SEI performs.
+/// The decision (Idea #4, step 3) is therefore to keep both tiers out of the
+/// enum and keep the chain linear. `EffectAnnotationParser` still *recognizes*
+/// the `/// @lint.effect transactional_idempotent` spelling, projecting it
+/// conservatively onto `.nonIdempotent` (the sound bound absent transaction
+/// verification) rather than silently dropping it.
+///
 /// Origin: lifted from SwiftProjectLint's `DeclaredEffect`
 /// (`Packages/SwiftProjectLintVisitors/Sources/SwiftProjectLintVisitors/EffectAnnotationParser.swift`)
 /// during migration step 3 of `docs/SwiftEffectInference Design v0.2.md` §10.

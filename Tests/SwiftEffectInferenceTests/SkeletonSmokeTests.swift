@@ -57,6 +57,32 @@ struct SkeletonSmokeTests {
         #expect(effect == .pure)
     }
 
+    @Test
+    func transactionalIdempotentDocComment_projectsToNonIdempotent() {
+        // SwiftIdempotency's `transactional_idempotent` is a doc-comment-only
+        // tier parallel to `externallyIdempotent` in a non-linear lattice. SEI
+        // keeps its chain linear (Idea #4, step 3) and projects the tier
+        // conservatively onto `.nonIdempotent` — recognized, not dropped.
+        let effect = effectOfFirstFunction(in: """
+        /// Commits two writes atomically.
+        /// @lint.effect transactional_idempotent
+        func commitBoth(_ a: Int, _ b: Int) {}
+        """)
+        #expect(effect == .nonIdempotent)
+    }
+
+    @Test
+    func transactionalIdempotentHasNoAttributeForm() {
+        // The tier is intentionally not exposed as a macro/attribute by
+        // SwiftIdempotency; an invented `@TransactionalIdempotent` attribute is
+        // unrecognized and yields no declared effect.
+        let effect = effectOfFirstFunction(in: """
+        @TransactionalIdempotent
+        func commitBoth(_ a: Int, _ b: Int) {}
+        """)
+        #expect(effect == nil)
+    }
+
     /// Parses `source`, finds the first `func` declaration, and returns the
     /// `Effect` the default-recognition parser reads from it (or `nil`).
     private func effectOfFirstFunction(in source: String) -> Effect? {

@@ -12,7 +12,7 @@ pure < observational < idempotent < externally_idempotent < non_idempotent
 
 ## Three primitives
 
-- **`EffectAnnotationParser`** — read declared effects from `/// @lint.effect …` doc-comment grammar **and** [`swiftidempotency`](https://github.com/Joseph-Cursio/swiftidempotency)'s attribute grammar (`@Pure`, `@Idempotent`, `@NonIdempotent`, `@Observational`, `@ExternallyIdempotent(by:)`). Recognized attribute names are configurable.
+- **`EffectAnnotationParser`** — read declared effects from `/// @lint.effect …` doc-comment grammar **and** [`swiftidempotency`](https://github.com/Joseph-Cursio/swiftidempotency)'s attribute grammar (`@Pure`, `@Idempotent`, `@NonIdempotent`, `@Observational`, `@ExternallyIdempotent(by:)`). Recognized attribute names are configurable. The doc-comment-only `/// @lint.effect transactional_idempotent` tier (parallel to `externallyIdempotent` in SwiftIdempotency's non-linear lattice) is *recognized* but conservatively projected onto `non_idempotent` to keep this lattice linear — see the decision note on `Effect`.
 - **`CallSiteEffectInferrer`** — classify call expressions by callee name + the file's imports. Framework-gated detection for FluentKit, Hummingbird, Vapor, AWSLambdaRuntime, and TCA; receiver-shape rules; CamelCase verb-prefix matching; stdlib-collection exclusion.
 - **`BodyEffectInferrer`** — body-based call-graph inference; computes the lub of direct callees' effects with depth tracking. Closure boundaries (`Task { }`, `withTaskGroup`, `Task.detached`, SwiftUI `.task { }`) are not recursed into.
 
