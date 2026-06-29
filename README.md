@@ -1,16 +1,18 @@
 # SwiftEffectInference
 
-Shared static-analysis library for classifying Swift functions and call sites by their **side-effect character** along a four-tier lattice:
+Shared static-analysis library for classifying Swift functions and call sites by their **side-effect character** along a five-tier lattice:
 
 ```
-observational < idempotent < externally_idempotent < non_idempotent
+pure < observational < idempotent < externally_idempotent < non_idempotent
 ```
+
+`pure` (referential transparency — no side effects, deterministic, total) is the bottom: strictly stronger than `observational`, which permits reads/logging. The upper four tiers classify *retry-safety*; `pure` adds the *referential-transparency* axis a property-based test needs.
 
 > **Status:** Pre-extraction skeleton. The full design lives in [`docs/SwiftEffectInference Design v0.2.md`](docs/SwiftEffectInference%20Design%20v0.2.md). The inference engines are being lifted from [SwiftProjectLint](https://github.com/Joseph-Cursio/SwiftProjectLint) per the migration plan in §10.
 
 ## Three primitives
 
-- **`EffectAnnotationParser`** — read declared effects from `/// @lint.effect …` doc-comment grammar **and** [`swiftidempotency`](https://github.com/Joseph-Cursio/swiftidempotency)'s attribute grammar (`@Idempotent`, `@NonIdempotent`, `@Observational`, `@ExternallyIdempotent(by:)`). Recognized attribute names are configurable.
+- **`EffectAnnotationParser`** — read declared effects from `/// @lint.effect …` doc-comment grammar **and** [`swiftidempotency`](https://github.com/Joseph-Cursio/swiftidempotency)'s attribute grammar (`@Pure`, `@Idempotent`, `@NonIdempotent`, `@Observational`, `@ExternallyIdempotent(by:)`). Recognized attribute names are configurable.
 - **`CallSiteEffectInferrer`** — classify call expressions by callee name + the file's imports. Framework-gated detection for FluentKit, Hummingbird, Vapor, AWSLambdaRuntime, and TCA; receiver-shape rules; CamelCase verb-prefix matching; stdlib-collection exclusion.
 - **`BodyEffectInferrer`** — body-based call-graph inference; computes the lub of direct callees' effects with depth tracking. Closure boundaries (`Task { }`, `withTaskGroup`, `Task.detached`, SwiftUI `.task { }`) are not recursed into.
 

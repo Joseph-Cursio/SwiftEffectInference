@@ -1,3 +1,5 @@
+import SwiftParser
+import SwiftSyntax
 import Testing
 @testable import SwiftEffectInference
 
@@ -13,6 +15,7 @@ struct SkeletonSmokeTests {
     @Test
     func effectCasesExist() {
         let cases: [Effect] = [
+            .pure,
             .observational,
             .idempotent,
             .externallyIdempotent(keyParameter: nil),
@@ -28,10 +31,41 @@ struct SkeletonSmokeTests {
     func effectAnnotationParserDefaultRecognitionMatchesSwiftIdempotency() {
         let parser = EffectAnnotationParser()
         let recognition = parser.recognition
+        #expect(recognition.pure.contains("Pure"))
         #expect(recognition.idempotent.contains("Idempotent"))
         #expect(recognition.nonIdempotent.contains("NonIdempotent"))
         #expect(recognition.observational.contains("Observational"))
         #expect(recognition.externallyIdempotent.contains("ExternallyIdempotent"))
+    }
+
+    @Test
+    func parsesPureFromDocCommentAnnotation() {
+        let effect = effectOfFirstFunction(in: """
+        /// Adds two numbers.
+        /// @lint.effect pure
+        func add(_ lhs: Int, _ rhs: Int) -> Int { lhs + rhs }
+        """)
+        #expect(effect == .pure)
+    }
+
+    @Test
+    func parsesPureFromAttributeAnnotation() {
+        let effect = effectOfFirstFunction(in: """
+        @Pure
+        func add(_ lhs: Int, _ rhs: Int) -> Int { lhs + rhs }
+        """)
+        #expect(effect == .pure)
+    }
+
+    /// Parses `source`, finds the first `func` declaration, and returns the
+    /// `Effect` the default-recognition parser reads from it (or `nil`).
+    private func effectOfFirstFunction(in source: String) -> Effect? {
+        let tree = Parser.parse(source: source)
+        let function = tree.statements.lazy
+            .compactMap { $0.item.as(FunctionDeclSyntax.self) }
+            .first
+        guard let function else { return nil }
+        return EffectAnnotationParser.parseEffect(declaration: function)
     }
 
     @Test

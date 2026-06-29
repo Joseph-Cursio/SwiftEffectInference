@@ -29,17 +29,24 @@ public struct EffectAnnotationParser: Sendable {
     /// when integrating a project-specific marker family.
     public struct AttributeRecognition: Sendable {
 
+        public let pure: Set<String>
         public let idempotent: Set<String>
         public let nonIdempotent: Set<String>
         public let observational: Set<String>
         public let externallyIdempotent: Set<String>
 
+        /// - Parameter pure: attribute names recognized as the `pure` tier
+        ///   (referential transparency). Defaults to `["Pure"]`. Carries a
+        ///   default so existing callers that predate the `pure` tier keep
+        ///   compiling — the addition is purely additive at the lattice bottom.
         public init(
             idempotent: Set<String>,
             nonIdempotent: Set<String>,
             observational: Set<String>,
-            externallyIdempotent: Set<String>
+            externallyIdempotent: Set<String>,
+            pure: Set<String> = ["Pure"]
         ) {
+            self.pure = pure
             self.idempotent = idempotent
             self.nonIdempotent = nonIdempotent
             self.observational = observational
@@ -52,7 +59,8 @@ public struct EffectAnnotationParser: Sendable {
             idempotent: ["Idempotent"],
             nonIdempotent: ["NonIdempotent"],
             observational: ["Observational"],
-            externallyIdempotent: ["ExternallyIdempotent"]
+            externallyIdempotent: ["ExternallyIdempotent"],
+            pure: ["Pure"]
         )
     }
 
@@ -157,6 +165,9 @@ public struct EffectAnnotationParser: Sendable {
             guard let attr = element.as(AttributeSyntax.self) else { continue }
             guard let typeName = Self.attributeTypeName(attr.attributeName) else { continue }
 
+            if recognition.pure.contains(typeName) {
+                return .pure
+            }
             if recognition.idempotent.contains(typeName) {
                 return .idempotent
             }
@@ -282,6 +293,8 @@ public struct EffectAnnotationParser: Sendable {
         let rest = line[range.upperBound...].trimmingLeadingWhitespace()
         let token = rest.firstWord()
         switch token {
+        case "pure":
+            return .pure
         case "idempotent":
             return .idempotent
         case "observational":

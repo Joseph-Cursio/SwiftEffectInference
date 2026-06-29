@@ -1,12 +1,21 @@
-/// Declared idempotency effect for a Swift function. The four-tier lattice
-/// classifies functions by retry-safety:
+/// Declared idempotency effect for a Swift function. The five-tier lattice
+/// classifies functions by retry-safety, with `pure` as the bottom:
 ///
 /// ```
-/// observational < idempotent < externallyIdempotent < nonIdempotent
+/// pure < observational < idempotent < externallyIdempotent < nonIdempotent
 /// ```
 ///
-/// - `observational`: pure read or logging/metric calls — retry-safe and
-///   does not affect program semantics.
+/// - `pure`: referentially transparent — no side effects, deterministic, and
+///   total. Strictly stronger than `observational`: a pure function is
+///   trivially retry-safe, but an observational function that logs or reads a
+///   clock is *not* pure. This is the tier a property-based test wants — the
+///   result is a function of the inputs alone. Retry-safety (the original
+///   lattice axis) and purity (referential transparency) are distinct
+///   properties; `pure` sits below `observational` because every pure
+///   function is also retry-safe, but not vice versa.
+/// - `observational`: read or logging/metric calls — retry-safe and does not
+///   affect program semantics, but may read external state (a clock, the
+///   environment) or emit a log, so it is not necessarily pure.
 /// - `idempotent`: subsequent invocations have the same effect as a single
 ///   invocation. `f(f(x))` is semantically equivalent to `f(x)`.
 /// - `externallyIdempotent`: idempotent *only if* routed through a
@@ -28,6 +37,7 @@
 /// during migration step 3 of `docs/SwiftEffectInference Design v0.2.md` §10.
 public enum Effect: Hashable, Sendable {
 
+    case pure
     case observational
     case idempotent
 
@@ -39,15 +49,19 @@ public enum Effect: Hashable, Sendable {
 
     case nonIdempotent
 
-    /// Lattice rank: 0 (most retry-safe) to 3 (most retry-hostile). Used
-    /// internally by `lub(_:)`; exposed for consumers that need to compare
-    /// effects across cases without pattern-matching every variant.
+    /// Lattice rank: 0 (most retry-safe — `pure`) to 4 (most retry-hostile —
+    /// `nonIdempotent`). Used internally by `lub(_:)`; exposed for consumers
+    /// that need to compare effects across cases without pattern-matching
+    /// every variant. Ranks are relative ordinals, not a stable wire format —
+    /// `lub(_:)` only compares them, so the absolute values may shift when the
+    /// lattice grows (as it did when `pure` was inserted at the bottom).
     public var rank: Int {
         switch self {
-        case .observational: return 0
-        case .idempotent: return 1
-        case .externallyIdempotent: return 2
-        case .nonIdempotent: return 3
+        case .pure: return 0
+        case .observational: return 1
+        case .idempotent: return 2
+        case .externallyIdempotent: return 3
+        case .nonIdempotent: return 4
         }
     }
 

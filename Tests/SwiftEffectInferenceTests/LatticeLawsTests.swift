@@ -4,9 +4,9 @@ import Testing
 /// Algebraic laws for the idempotency effect lattice — `Effect.lub` and
 /// `Effect.rank` — owned at the source.
 ///
-/// The lattice is a four-element chain:
+/// The lattice is a five-element chain:
 ///
-///     observational < idempotent < externallyIdempotent < nonIdempotent
+///     pure < observational < idempotent < externallyIdempotent < nonIdempotent
 ///
 /// Because the domain is finite and tiny, these laws are checked **exhaustively**
 /// (every pair and every triple of the canonical elements) rather than by
@@ -20,10 +20,11 @@ import Testing
 @Suite
 struct LatticeLawsTests {
 
-    /// The four canonical lattice elements, one per rank. `externallyIdempotent`
+    /// The five canonical lattice elements, one per rank. `externallyIdempotent`
     /// uses `keyParameter: nil`; the associated value only affects same-rank
     /// tie-breaks, which are covered explicitly in the key-parameter tests.
     private static let canonical: [Effect] = [
+        .pure,
         .observational,
         .idempotent,
         .externallyIdempotent(keyParameter: nil),
@@ -35,10 +36,11 @@ struct LatticeLawsTests {
     /// rank assignment disagrees with this oracle and the laws fail loudly.
     private static func expectedRank(_ effect: Effect) -> Int {
         switch effect {
-        case .observational: 0
-        case .idempotent: 1
-        case .externallyIdempotent: 2
-        case .nonIdempotent: 3
+        case .pure: 0
+        case .observational: 1
+        case .idempotent: 2
+        case .externallyIdempotent: 3
+        case .nonIdempotent: 4
         }
     }
 
@@ -140,7 +142,7 @@ struct LatticeLawsTests {
         let right = Effect.externallyIdempotent(keyParameter: "second")
         #expect(left.lub(right) == left)
         #expect(right.lub(left) == right)
-        #expect(left.lub(right).rank == 2)
+        #expect(left.lub(right).rank == 3)
     }
 
     @Test
@@ -157,5 +159,27 @@ struct LatticeLawsTests {
         #expect(Effect.idempotent.lub(keyed) == keyed)
         #expect(keyed.lub(.idempotent) == keyed)
         #expect(Effect.nonIdempotent.lub(keyed) == .nonIdempotent)
+    }
+
+    // MARK: - `pure` is the lattice bottom
+
+    @Test
+    func pure_isStrictBottom() {
+        #expect(Effect.pure.rank == 0)
+        for effect in Self.canonical {
+            // `pure` is dominated by every element (including itself): joining
+            // anything with `pure` yields that other element.
+            #expect(Effect.pure.lub(effect) == effect)
+            #expect(effect.lub(.pure) == effect)
+        }
+    }
+
+    @Test
+    func pure_isStrictlyStrongerThanObservational() {
+        // A pure function is observational, but not vice versa: the join of the
+        // two is `observational`, and they are distinct elements.
+        #expect(Effect.pure != Effect.observational)
+        #expect(Effect.pure.rank < Effect.observational.rank)
+        #expect(Effect.pure.lub(.observational) == .observational)
     }
 }
