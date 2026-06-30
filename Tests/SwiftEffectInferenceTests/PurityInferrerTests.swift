@@ -50,6 +50,46 @@ struct PurityInferrerTests {
     }
 
     @Test
+    func clockReading_refutesPure() {
+        // `Date()` reads the system clock — nondeterministic, not a function of
+        // the inputs.
+        let effect = effectOfFirstFunction(in: """
+        func stamp(_ id: Int) -> Double { Date().timeIntervalSince1970 + Double(id) }
+        """)
+        #expect(effect == nil)
+    }
+
+    @Test
+    func uuidGeneration_refutesPure() {
+        let effect = effectOfFirstFunction(in: """
+        func tag(_ name: String) -> String { UUID().uuidString + name }
+        """)
+        #expect(effect == nil)
+    }
+
+    @Test
+    func cfAbsoluteTime_refutesPure() {
+        let effect = effectOfFirstFunction(in: """
+        func elapsed(_ since: Double) -> Double { CFAbsoluteTimeGetCurrent() - since }
+        """)
+        #expect(effect == nil)
+    }
+
+    @Test
+    func deterministicDateConstruction_isConservativelyRefuted() {
+        // KNOWN, ACCEPTED over-refutation: `Date(timeIntervalSince1970: x)` is a
+        // *deterministic* function of its input and is genuinely pure, but the
+        // token scan can't distinguish it from the no-arg `Date()`. Refuting it
+        // is the sound direction (withhold `.pure` rather than risk claiming it
+        // for a clock read). This test pins that behavior so it stays intentional
+        // — the AST-precise carve-out lives in SwiftProjectLint's rule.
+        let effect = effectOfFirstFunction(in: """
+        func at(_ seconds: Double) -> Date { Date(timeIntervalSince1970: seconds) }
+        """)
+        #expect(effect == nil)
+    }
+
+    @Test
     func forceUnwrap_refutesPure() {
         let effect = effectOfFirstFunction(in: """
         func first(_ values: [Int]) -> Int { values.first! }

@@ -36,20 +36,37 @@ public struct PurityInferrer: Sendable {
         // Stateless — the inferrer holds no configuration.
     }
 
-    /// Strong impurity markers — any reference in the body refutes purity.
-    /// I/O, logging, persistence, and the nondeterministic randomness family
-    /// each introduce an effect or a non-reproducible result.
-    private static let impureMarkers: Set<String> = [
+    /// Side-effect markers — I/O, logging, persistence. Any reference in the
+    /// body refutes the "no side effects" clause of purity.
+    private static let sideEffectMarkers: Set<String> = [
         "print", "NSLog", "FileManager", "URLSession", "UserDefaults",
-        "NotificationCenter", "DispatchQueue",
-        "arc4random", "arc4random_uniform", "drand48",
-        "random", "randomElement", "shuffled"
+        "NotificationCenter", "DispatchQueue"
+    ]
+
+    /// Nondeterminism markers — sources whose result is not a function of the
+    /// inputs (the randomness family, the system clock, identity generation).
+    /// Any reference refutes the "deterministic" clause of purity.
+    ///
+    /// Matched by bare-identifier token, so this is deliberately conservative:
+    /// it refutes `Date()` *and* the deterministic `Date(timeIntervalSince1970:)`
+    /// alike (the token scan can't tell them apart), and refutes injected
+    /// `random(in:using:)` as well as the system-RNG form. Over-refutation is
+    /// the sound direction on the effect lattice — better to withhold `.pure`
+    /// than to claim it for a clock-reading function — and both consumers (the
+    /// linter's candidate nudge, the inferrer's `pure`-suggestion gate) prefer
+    /// to refute when unsure. The AST-precise forms live in SwiftProjectLint's
+    /// `NonInjectedNondeterminismVisitor`; this token set is the leaf-level
+    /// over-approximation of that rule.
+    private static let nondeterministicMarkers: Set<String> = [
+        "arc4random", "arc4random_uniform", "drand48", "CFAbsoluteTimeGetCurrent",
+        "random", "randomElement", "shuffled",
+        "Date", "UUID"
     ]
 
     /// Returns `.pure` when `function` is referentially transparent — its
     /// signature is synchronous and non-throwing, its body references no
-    /// impurity marker, and nothing in it can trap — and `nil` (purity
-    /// refuted) otherwise.
+    /// side-effect or nondeterminism marker, and nothing in it can trap — and
+    /// `nil` (purity refuted) otherwise.
     ///
     /// `async` and `throws` both refute purity: an `async` body awaits some
     /// effect, and a `throws` function has no return value for the inputs that
@@ -58,7 +75,7 @@ public struct PurityInferrer: Sendable {
     public func inferredEffect(for function: FunctionDeclSyntax) -> Effect? {
         guard let body = function.body else { return nil }
         guard isSynchronousAndNonThrowing(function.signature) else { return nil }
-        guard !bodyLooksImpure(body), bodyIsTotal(body) else { return nil }
+        guard !bodyHasRefutingMarker(body), bodyIsTotal(body) else { return nil }
         return .pure
     }
 
@@ -74,8 +91,11 @@ public struct PurityInferrer: Sendable {
             && signature.effectSpecifiers?.throwsClause == nil
     }
 
-    private func bodyLooksImpure(_ body: CodeBlockSyntax) -> Bool {
-        body.tokens(viewMode: .sourceAccurate).contains { Self.impureMarkers.contains($0.text) }
+    private func bodyHasRefutingMarker(_ body: CodeBlockSyntax) -> Bool {
+        body.tokens(viewMode: .sourceAccurate).contains {
+            Self.sideEffectMarkers.contains($0.text)
+                || Self.nondeterministicMarkers.contains($0.text)
+        }
     }
 
     /// True when nothing in the body can trap (crash) at runtime — the property
