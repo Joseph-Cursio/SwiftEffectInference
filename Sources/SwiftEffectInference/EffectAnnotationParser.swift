@@ -337,6 +337,74 @@ public struct EffectAnnotationParser: Sendable {
     }
 }
 
+// MARK: - Clock-determinism annotation (collections/async workplan Phase 4)
+
+extension EffectAnnotationParser {
+
+    /// Recognizes the *clock-determinism* marker: a user-declared claim that
+    /// an `async` function's observable behavior is a deterministic function
+    /// of its inputs **given an injected `Clock`** — time is a parameter,
+    /// not an ambient effect. The claim's runtime counterpart is
+    /// SwiftPropertyLaws' `TimedAsyncSequence` law family (PropertyLawAsync,
+    /// v3.15.0+): `debounceIsDeterministicUnderTestClock` is exactly this
+    /// property, checked.
+    ///
+    /// Deliberately **orthogonal to the `Effect` lattice**: `.pure`'s
+    /// contract implies synchronous + total, and the retry-safety tiers say
+    /// nothing about time. Mapping this claim onto an existing tier would
+    /// silently weaken `.pure` (async functions could then claim it), and a
+    /// new tier would ripple `Effect.rank` and every ordinal consumer. A
+    /// standalone predicate lets downstream consumers (SwiftInferProperties'
+    /// async hard-veto) take the *conjunction*: relax the veto only where
+    /// this marker is present AND their own refuters stay quiet.
+    ///
+    /// Grammar mirrors the effect annotation's two forms:
+    /// - doc comment: `/// @lint.determinism clock_deterministic` — its own
+    ///   `@lint.determinism` namespace, since `@lint.effect` names lattice
+    ///   tiers and this is not one;
+    /// - attribute: `@ClockDeterministic`.
+    ///
+    /// Content-blind like every annotation here: presence is a claim for
+    /// human review + law-checking, not an analysis result. No
+    /// collision-withdraw applies — a Bool predicate has no disagreeing
+    /// forms; either grammar alone marks the declaration.
+    public func isClockDeterministic(declaration: FunctionDeclSyntax) -> Bool {
+        hasClockDeterministicAttribute(declaration.attributes)
+            || Self.hasClockDeterministicDocComment(Self.combinedDocTrivia(for: declaration))
+    }
+
+    /// Same combined-position scan for variable bindings (handler-style
+    /// closures), mirroring `parseEffect(declaration:)`.
+    public func isClockDeterministic(declaration: VariableDeclSyntax) -> Bool {
+        hasClockDeterministicAttribute(declaration.attributes)
+            || Self.hasClockDeterministicDocComment(Self.combinedDocTrivia(for: declaration))
+    }
+
+    /// Convenience for callers that don't customize attribute recognition.
+    public static func isClockDeterministic(declaration: FunctionDeclSyntax) -> Bool {
+        EffectAnnotationParser().isClockDeterministic(declaration: declaration)
+    }
+
+    /// Names recognized as the clock-determinism marker attribute.
+    static let clockDeterministicAttributeNames: Set<String> = ["ClockDeterministic"]
+
+    private func hasClockDeterministicAttribute(_ attributes: AttributeListSyntax) -> Bool {
+        attributes.contains { element in
+            guard let attr = element.as(AttributeSyntax.self),
+                  let name = Self.attributeTypeName(attr.attributeName) else { return false }
+            return Self.clockDeterministicAttributeNames.contains(name)
+        }
+    }
+
+    private static func hasClockDeterministicDocComment(_ trivia: Trivia) -> Bool {
+        docCommentLines(from: trivia).contains { line in
+            guard let range = line.range(of: "@lint.determinism") else { return false }
+            let token = line[range.upperBound...].trimmingLeadingWhitespace().firstWord()
+            return token == "clock_deterministic"
+        }
+    }
+}
+
 // MARK: - Substring helpers
 
 private extension Substring {
