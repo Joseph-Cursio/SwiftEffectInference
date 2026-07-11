@@ -38,7 +38,10 @@ public struct EffectAnnotationParser: Sendable {
         /// - Parameter pure: attribute names recognized as the `pure` tier
         ///   (referential transparency). Defaults to `["Pure"]`. Carries a
         ///   default so existing callers that predate the `pure` tier keep
-        ///   compiling — the addition is purely additive at the lattice bottom.
+        ///   compiling — the addition is purely additive at the lattice
+        ///   bottom. The name was recognized prospectively for a while;
+        ///   swiftidempotency ships the `@Pure` marker macro as of its
+        ///   2026-07-10 releases, so the attribute spelling now compiles.
         public init(
             idempotent: Set<String>,
             nonIdempotent: Set<String>,
@@ -54,7 +57,10 @@ public struct EffectAnnotationParser: Sendable {
         }
 
         /// Default recognition set, matching `swiftidempotency`'s shipped
-        /// macros at the time SwiftEffectInference was tagged.
+        /// macros (all five effect-family names ship there as of
+        /// 2026-07-10, `@Pure` included; the orthogonal `@ClockDeterministic`
+        /// marker also ships there but is recognized via
+        /// `isClockDeterministic(declaration:)`, not this set).
         public static let `default` = AttributeRecognition(
             idempotent: ["Idempotent"],
             nonIdempotent: ["NonIdempotent"],
