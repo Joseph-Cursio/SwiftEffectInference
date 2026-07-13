@@ -185,6 +185,24 @@ public struct EffectSymbolTable: Sendable {
         return effectFromDeclarationShapes(callSite: callSite)
     }
 
+    /// The single annotated declaration that `callSite` could have reached, or `nil` when none
+    /// could or when several could and the choice is ambiguous.
+    ///
+    /// Lets a consumer ask about the *declaration* behind a call — in particular, whether a
+    /// parameter the call left out was one the declaration allowed it to leave out. That is the
+    /// difference between "the caller omitted a required argument" (a compile error, not our
+    /// problem) and "the caller took a default" (which, for an idempotency key, is a silent
+    /// correctness hole).
+    public func declaration(matching callSite: CallSiteShape) -> DeclarationShape? {
+        guard let candidates = shapesByName[callSite.signature.name] else { return nil }
+
+        let matches = candidates
+            .filter { $0.shape.accepts(callSite) }
+            .map(\.shape)
+
+        return matches.count == 1 ? matches.first : nil
+    }
+
     /// The effect of the annotated declarations that could accept `callSite`, or `nil` when
     /// none could or when they disagree.
     private func effectFromDeclarationShapes(callSite: CallSiteShape) -> Effect? {
