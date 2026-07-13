@@ -329,9 +329,15 @@ public enum EffectProvenance: Sendable, Equatable {
 
 // MARK: - Visitors (internal)
 
-/// Collects every `FunctionDeclSyntax` in a source file. Unlike SPL's
-/// version, does not filter by `@lint.context` — the shared core only
-/// tracks effects.
+/// Collects every `FunctionDeclSyntax` in a source file. The shared core only
+/// tracks effects; the execution-context axis (`@lint.context`) is a linting
+/// concern and lives in its consumer.
+///
+/// Descent stops at closure expressions. A declaration written inside a closure
+/// body cannot be called by name from outside it, so registering it would put a
+/// signature in the table that no call site can legitimately resolve to — and,
+/// worse, could collide with a real top-level declaration of the same shape.
+/// `BodyEffectInferrer`'s collectors already stop at closures; these now agree.
 final class FunctionDeclCollector: SourceAccurateSyntaxVisitor {
 
     var functions: [FunctionDeclSyntax] = []
@@ -340,11 +346,16 @@ final class FunctionDeclCollector: SourceAccurateSyntaxVisitor {
         functions.append(node)
         return .visitChildren
     }
+
+    override func visit(_ node: ClosureExprSyntax) -> SyntaxVisitorContinueKind {
+        .skipChildren
+    }
 }
 
 /// Collects closure-typed property declarations that participate in the
 /// pseudo-method registration path (`var search: @Sendable () -> Void`,
-/// `let handler = { ... }`).
+/// `let handler = { ... }`). Stops at closure expressions for the same reason
+/// as `FunctionDeclCollector`.
 final class ClosurePropertyDeclCollector: SourceAccurateSyntaxVisitor {
 
     var properties: [VariableDeclSyntax] = []
@@ -353,13 +364,21 @@ final class ClosurePropertyDeclCollector: SourceAccurateSyntaxVisitor {
         properties.append(node)
         return .visitChildren
     }
+
+    override func visit(_ node: ClosureExprSyntax) -> SyntaxVisitorContinueKind {
+        .skipChildren
+    }
 }
 
 /// `true` if `decl` lives inside a function body, initializer, deinit, or
 /// accessor. Function-local closure bindings can't be called by name from
 /// outside their enclosing scope, so they don't participate in the
 /// pseudo-method registration path.
-func isFunctionLocal(_ decl: VariableDeclSyntax) -> Bool {
+///
+/// Public because consumers building their own inference passes over the same
+/// declarations need to apply the identical exclusion — `SwiftProjectLint`'s
+/// upward inferrer being the motivating case.
+public func isFunctionLocal(_ decl: VariableDeclSyntax) -> Bool {
     var current: Syntax? = Syntax(decl).parent
     while let node = current {
         if node.is(FunctionDeclSyntax.self) ||

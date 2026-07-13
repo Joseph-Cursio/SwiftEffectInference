@@ -190,6 +190,47 @@ public struct EffectAnnotationParser: Sendable {
         return nil
     }
 
+    // MARK: - Doc-comment scanning (public: reused by consumers' own grammars)
+
+    /// The doc-comment trivia attached to `declaration`, gathered from every position
+    /// in its header where SwiftSyntax may have parked it.
+    ///
+    /// Public because the effect lattice is not the only annotation grammar written above
+    /// a declaration — `SwiftProjectLint`'s `@lint.context` axis is another — and every such
+    /// grammar needs *this* trivia, not `declaration.leadingTrivia`. A doc comment above a
+    /// decl that carries attributes or modifiers is attached by SwiftSyntax to the attribute
+    /// or modifier, not to the `func` keyword; a parser that reads only `leadingTrivia`
+    /// silently sees nothing. Exposing the routing keeps consumers from re-deriving it —
+    /// and getting it subtly wrong, which is how forks begin.
+    public static func documentationTrivia(for declaration: FunctionDeclSyntax) -> Trivia {
+        combinedDocTrivia(for: declaration)
+    }
+
+    /// The doc-comment trivia attached to `declaration`. See the `FunctionDeclSyntax` overload.
+    public static func documentationTrivia(for declaration: VariableDeclSyntax) -> Trivia {
+        combinedDocTrivia(for: declaration)
+    }
+
+    /// The text of each `///` line and each `/** … */` line in `trivia`, comment markers
+    /// stripped. Non-doc comments (`//`, `/* */`) are ignored, as they are for effects.
+    public static func documentationLines(in trivia: Trivia) -> [String] {
+        docCommentLines(from: trivia)
+    }
+
+    /// The bare word following `marker` on `line`, or `nil` when `marker` is absent.
+    ///
+    /// The word ends at whitespace, `(` or `:`, so `@lint.context strict_replayable` yields
+    /// `"strict_replayable"` and `@lint.effect externally_idempotent(by: "key")` yields
+    /// `"externally_idempotent"`. Together with `documentationLines(in:)` this is everything a
+    /// sibling annotation grammar needs to read its own marker off a declaration, without
+    /// re-implementing the trivia routing or the tokenizer.
+    public static func token(after marker: String, in line: String) -> String? {
+        guard let range = line.range(of: marker) else { return nil }
+
+        let word = line[range.upperBound...].trimmingLeadingWhitespace().firstWord()
+        return word.isEmpty ? nil : word
+    }
+
     // MARK: Static helpers (no instance state needed)
 
     /// Combines trivia from every position in a function declaration's
