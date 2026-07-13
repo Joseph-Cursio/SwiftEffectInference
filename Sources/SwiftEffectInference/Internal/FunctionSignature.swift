@@ -31,6 +31,93 @@ public struct FunctionSignature: Sendable, Hashable {
     }
 }
 
+/// A declaration's signature plus which of its parameters a call site may leave out.
+///
+/// `FunctionSignature` alone cannot answer "could this call have been this
+/// declaration?", because a declaration's label list names *every* parameter while a
+/// call site's names only the ones actually written. Any parameter with a default —
+/// or a variadic, which accepts nothing — may be absent from the call. Matching the
+/// two label lists for equality therefore misses every call that omits a default, and
+/// the miss is silent: the declared effect never lands and the caller falls back to
+/// name-based inference.
+///
+/// `DeclarationShape` carries the omittability alongside the labels so `accepts(callLabels:)`
+/// can apply Swift's actual rule instead of string equality.
+public struct DeclarationShape: Sendable, Hashable {
+    public let signature: FunctionSignature
+
+    /// Positionally aligned with `signature.argumentLabels`: `true` where the
+    /// parameter has a default value or is variadic, and so may be omitted.
+    public let omittableParameters: [Bool]
+
+    public init(signature: FunctionSignature, omittableParameters: [Bool]) {
+        self.signature = signature
+        self.omittableParameters = omittableParameters
+    }
+
+    /// Whether a call written with `callLabels` could have resolved to this declaration.
+    ///
+    /// Walks the two label lists in step, skipping a declared parameter only when it is
+    /// omittable — which is exactly Swift's rule: arguments appear in declaration order,
+    /// and only defaulted (or variadic) parameters may be left out. Argument order is
+    /// therefore still significant, an unknown label still fails, and a missing
+    /// *required* parameter still fails.
+    public func accepts(callLabels: [String]) -> Bool {
+        let declaredLabels = signature.argumentLabels
+        guard omittableParameters.count == declaredLabels.count else { return false }
+
+        var declaredIndex = 0
+        for callLabel in callLabels {
+            // Step over parameters the call chose not to supply. Only omittable ones
+            // may be skipped; hitting a required parameter means no match.
+            while declaredIndex < declaredLabels.count,
+                  declaredLabels[declaredIndex] != callLabel,
+                  omittableParameters[declaredIndex] {
+                declaredIndex += 1
+            }
+            guard declaredIndex < declaredLabels.count,
+                  declaredLabels[declaredIndex] == callLabel else {
+                return false
+            }
+            declaredIndex += 1
+        }
+
+        // Whatever the call never reached must be omittable.
+        while declaredIndex < declaredLabels.count {
+            guard omittableParameters[declaredIndex] else { return false }
+            declaredIndex += 1
+        }
+        return true
+    }
+}
+
+public extension DeclarationShape {
+
+    /// The call-site shape of a function declaration: its labels, plus which parameters
+    /// carry a default value or are variadic.
+    static func from(declaration: FunctionDeclSyntax) -> DeclarationShape {
+        let omittable = declaration.signature.parameterClause.parameters.map { param in
+            param.defaultValue != nil || param.ellipsis != nil
+        }
+        return DeclarationShape(
+            signature: FunctionSignature.from(declaration: declaration),
+            omittableParameters: omittable
+        )
+    }
+
+    /// The call-site shape of a closure-typed stored property. Swift function types
+    /// cannot carry default arguments, so no parameter is omittable.
+    static func from(declaration: VariableDeclSyntax) -> DeclarationShape? {
+        guard let signature = FunctionSignature.from(declaration: declaration) else {
+            return nil
+        }
+        return DeclarationShape(
+            signature: signature,
+            omittableParameters: Array(repeating: false, count: signature.argumentLabels.count)
+        )
+    }
+}
+
 public extension FunctionSignature {
 
     /// Computes the signature of a function declaration from its syntax. Uses

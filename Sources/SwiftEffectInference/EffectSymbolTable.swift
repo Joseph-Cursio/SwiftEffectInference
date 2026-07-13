@@ -57,6 +57,16 @@ public struct EffectSymbolTable: Sendable {
     /// never override a declared one.
     private var upwardInferredEffects: [FunctionSignature: BodyInference] = [:]
 
+    /// Annotated declarations indexed by bare name, carrying which of their parameters
+    /// may be omitted at a call site. Consulted only when an exact-signature lookup
+    /// misses, so a call that writes every argument never pays for this.
+    ///
+    /// Needed because a declaration's label list names every parameter while a call
+    /// site's names only the ones written: `createRequest(endpoint:method:body:queryItems:)`
+    /// is called as `createRequest(endpoint:method:)` whenever the defaults suffice, and
+    /// keying the lookup on equality alone silently misses it.
+    private var shapesByName: [String: [(shape: DeclarationShape, effect: Effect)]] = [:]
+
     public init() {}
 
     /// Builds a symbol table by walking every annotated function and
@@ -78,8 +88,7 @@ public struct EffectSymbolTable: Sendable {
         funcCollector.walk(source)
         for funcDecl in funcCollector.functions {
             guard let effect = parser.parseEffect(declaration: funcDecl) else { continue }
-            let signature = FunctionSignature.from(declaration: funcDecl)
-            record(signature: signature, effect: effect)
+            record(shape: DeclarationShape.from(declaration: funcDecl), effect: effect)
         }
 
         // Closure-typed stored properties as pseudo-method declarations.
@@ -93,18 +102,35 @@ public struct EffectSymbolTable: Sendable {
         propCollector.walk(source)
         for varDecl in propCollector.properties {
             guard !isFunctionLocal(varDecl),
-                  let signature = FunctionSignature.from(declaration: varDecl),
+                  let shape = DeclarationShape.from(declaration: varDecl),
                   let effect = parser.parseEffect(declaration: varDecl) else {
                 continue
             }
-            record(signature: signature, effect: effect)
+            record(shape: shape, effect: effect)
         }
     }
 
-    /// Records one annotated occurrence of a function signature.
-    /// Unannotated declarations are filtered out by `merge(source:parser:)`
-    /// before reaching this method.
+    /// Records one annotated occurrence of a function signature, with no parameter
+    /// treated as omittable. Equivalent to a declaration whose parameters all lack
+    /// defaults; prefer `record(shape:effect:)` when the declaration is to hand.
     public mutating func record(signature: FunctionSignature, effect: Effect) {
+        record(
+            shape: DeclarationShape(
+                signature: signature,
+                omittableParameters: Array(repeating: false, count: signature.argumentLabels.count)
+            ),
+            effect: effect
+        )
+    }
+
+    /// Records one annotated declaration, keeping both the exact-signature entry and
+    /// the call-site shape that lets a caller omitting defaults still find it.
+    /// Unannotated declarations are filtered out by `merge(source:parser:)` before
+    /// reaching this method.
+    public mutating func record(shape: DeclarationShape, effect: Effect) {
+        shapesByName[shape.signature.name, default: []].append((shape, effect))
+
+        let signature = shape.signature
         annotatedCounts[signature, default: 0] += 1
         let count = annotatedCounts[signature] ?? 0
 
@@ -119,10 +145,43 @@ public struct EffectSymbolTable: Sendable {
         entriesBySignature.removeValue(forKey: signature)
     }
 
-    /// Returns the declared effect for `signature`, or `nil` if the signature
-    /// has no annotated entry (zero declarations, or withdrawn by collision).
+    /// Returns the declared effect for a **call-site** `signature`, or `nil` if no
+    /// annotated declaration answers to it (zero declarations, or withdrawn by collision).
+    ///
+    /// An exact-signature entry wins, mirroring Swift's own preference for the overload
+    /// that needs no defaults. Failing that, the annotated declarations sharing this bare
+    /// name are asked whether they *could* have been called this way — which is how a call
+    /// that omits a defaulted argument reaches its declaration at all. If several could,
+    /// and they disagree about the effect, the lookup withdraws: guessing which overload
+    /// the compiler picked would be worse than staying silent.
     public func effect(for signature: FunctionSignature) -> Effect? {
-        entriesBySignature[signature]?.effect
+        if let exact = entriesBySignature[signature]?.effect {
+            return exact
+        }
+        // A signature withdrawn by collision stays withdrawn — do not let shape
+        // matching resurrect an ambiguity the collision policy already refused.
+        if isCollision(signature: signature) {
+            return nil
+        }
+        return effectFromDeclarationShapes(callSignature: signature)
+    }
+
+    /// The effect of the annotated declarations that could accept `callSignature`, or
+    /// `nil` when none could or when they disagree.
+    private func effectFromDeclarationShapes(callSignature: FunctionSignature) -> Effect? {
+        guard let candidates = shapesByName[callSignature.name] else { return nil }
+
+        var matched: Set<Effect> = []
+        for candidate in candidates
+        where entriesBySignature[candidate.shape.signature] != nil
+            && candidate.shape.accepts(callLabels: callSignature.argumentLabels) {
+            matched.insert(candidate.effect)
+        }
+
+        // Ambiguous about *which* declaration but agreed about the answer is not an
+        // ambiguity worth withdrawing over — whichever the compiler picked, the effect
+        // is the same.
+        return matched.count == 1 ? matched.first : nil
     }
 
     /// `true` if two or more annotated declarations of `signature` were
