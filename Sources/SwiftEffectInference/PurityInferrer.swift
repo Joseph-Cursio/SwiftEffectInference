@@ -84,6 +84,44 @@ public struct PurityInferrer: Sendable {
         inferredEffect(for: function) == .pure
     }
 
+    /// Whether a **closure literal** is referentially transparent — the same refuters as a
+    /// function, applied to the closure's statements.
+    ///
+    /// Closures need their own answer because a great deal of pure logic in real Swift has no name.
+    /// A `filter` predicate or a `sorted(by:)` comparator written inline is a pure function in
+    /// everything but syntax, and being anonymous is the only thing standing between it and a
+    /// property test.
+    ///
+    /// **A capture is not an impurity.** The closure
+    ///
+    ///     files.filter { file in isChild(file.path, of: currentPath) }
+    ///
+    /// captures `currentPath`, and `currentPath` may well be a `var`. That says nothing about this
+    /// closure: lift the body into `isChild(_ path: String, of parent: String)` and the capture
+    /// simply *becomes a parameter*. What the caller does with its own state is the caller's
+    /// business. What refutes purity is the body **mutating** what it captured — then it is not a
+    /// function of its inputs, and no extraction saves it.
+    public func isPure(_ closure: ClosureExprSyntax) -> Bool {
+        // A closure declaring `async` or `throws` is out for the same reason a function is.
+        if let effects = closure.signature?.effectSpecifiers,
+           effects.asyncSpecifier != nil || effects.throwsClause != nil {
+            return false
+        }
+
+        let statements = Syntax(closure.statements)
+        guard !hasRefutingMarker(in: statements), isTotal(statements) else { return false }
+
+        return !mutatesCapturedState(closure)
+    }
+
+    /// Whether the closure assigns to anything it did not itself declare — the one thing a capture
+    /// can do that no extraction can rescue.
+    private func mutatesCapturedState(_ closure: ClosureExprSyntax) -> Bool {
+        let checker = CaptureMutationChecker(closure: closure, viewMode: .sourceAccurate)
+        checker.walk(closure.statements)
+        return checker.mutatesCapture
+    }
+
     // MARK: - Refutation predicates
 
     private func isSynchronousAndNonThrowing(_ signature: FunctionSignatureSyntax) -> Bool {
@@ -92,10 +130,22 @@ public struct PurityInferrer: Sendable {
     }
 
     private func bodyHasRefutingMarker(_ body: CodeBlockSyntax) -> Bool {
-        body.tokens(viewMode: .sourceAccurate).contains {
+        hasRefutingMarker(in: Syntax(body))
+    }
+
+    /// Any I/O, logging, persistence, clock or randomness marker anywhere in `syntax`.
+    private func hasRefutingMarker(in syntax: Syntax) -> Bool {
+        syntax.tokens(viewMode: .sourceAccurate).contains {
             Self.sideEffectMarkers.contains($0.text)
                 || Self.nondeterministicMarkers.contains($0.text)
         }
+    }
+
+    /// Whether nothing in `syntax` can trap at runtime.
+    private func isTotal(_ syntax: Syntax) -> Bool {
+        let checker = TotalityChecker()
+        checker.walk(syntax)
+        return checker.isTotal
     }
 
     /// True when nothing in the body can trap (crash) at runtime — the property
@@ -104,9 +154,7 @@ public struct PurityInferrer: Sendable {
     /// introduce inputs for which there is no return value, so a property test
     /// over generated inputs would hit a crash rather than a falsified law.
     private func bodyIsTotal(_ body: CodeBlockSyntax) -> Bool {
-        let checker = TotalityChecker()
-        checker.walk(body)
-        return checker.isTotal
+        isTotal(Syntax(body))
     }
 }
 
@@ -151,6 +199,106 @@ private final class TotalityChecker: SourceAccurateSyntaxVisitor {
            Self.trapFunctions.contains(callee) {
             isTotal = false
         }
+        return .visitChildren
+    }
+}
+
+/// Detects a closure assigning to something it captured rather than declared.
+///
+/// A capture that is only *read* becomes a parameter when the closure is lifted into a named
+/// function, and the lifted function is pure. A capture that is *written* cannot be lifted into
+/// anything pure — the closure's whole job is the side effect, and no signature change fixes that.
+///
+/// Names bound by the closure itself — its parameters, and any `let`/`var` in its body — are fair
+/// game to assign to: they are locals, not state.
+private final class CaptureMutationChecker: SourceAccurateSyntaxVisitor {
+
+    private let locallyBound: Set<String>
+    private(set) var mutatesCapture = false
+
+    init(closure: ClosureExprSyntax, viewMode: SyntaxTreeViewMode) {
+        self.locallyBound = Self.namesBound(by: closure)
+        super.init()
+    }
+
+    /// The folded form — present when the tree has been through an `OperatorTable`.
+    override func visit(_ node: InfixOperatorExprSyntax) -> SyntaxVisitorContinueKind {
+        guard isAssignment(node.operator) else { return .visitChildren }
+        refuteIfCaptured(node.leftOperand)
+        return .visitChildren
+    }
+
+    /// The *unfolded* form, which is what `Parser.parse` actually produces: an operator sequence is
+    /// a flat `SequenceExprSyntax` until an `OperatorTable` folds it, so a visitor that only knows
+    /// `InfixOperatorExprSyntax` sees no assignments at all.
+    override func visit(_ node: SequenceExprSyntax) -> SyntaxVisitorContinueKind {
+        let elements = Array(node.elements)
+        for (index, element) in elements.enumerated()
+        where index > 0 && isAssignment(element) {
+            refuteIfCaptured(elements[index - 1])
+        }
+        return .visitChildren
+    }
+
+    /// Records a mutation when `target` writes through something the closure captured rather than
+    /// declared.
+    private func refuteIfCaptured(_ target: ExprSyntax) {
+        if let root = rootName(of: target), !locallyBound.contains(root) {
+            mutatesCapture = true
+        }
+    }
+
+    /// `=`, and the compound forms (`+=`, `-=`, …) — all of which write to the left-hand side.
+    private func isAssignment(_ operatorExpr: ExprSyntax) -> Bool {
+        if operatorExpr.is(AssignmentExprSyntax.self) { return true }
+        guard let binary = operatorExpr.as(BinaryOperatorExprSyntax.self) else { return false }
+        return binary.operator.text.hasSuffix("=")
+            && !["==", "!=", "<=", ">="].contains(binary.operator.text)
+    }
+
+    /// The base identifier an assignment target ultimately writes through: `a` in `a`, `a.b`,
+    /// `a[0].b`. `self.x = …` yields `self`, which is never locally bound, so it refutes.
+    private func rootName(of expr: ExprSyntax) -> String? {
+        if let reference = expr.as(DeclReferenceExprSyntax.self) {
+            return reference.baseName.text
+        }
+        if let member = expr.as(MemberAccessExprSyntax.self), let base = member.base {
+            return rootName(of: base)
+        }
+        if let subscriptExpr = expr.as(SubscriptCallExprSyntax.self) {
+            return rootName(of: subscriptExpr.calledExpression)
+        }
+        return nil
+    }
+
+    /// The closure's own parameters, plus every name it binds in its body.
+    private static func namesBound(by closure: ClosureExprSyntax) -> Set<String> {
+        var names: Set<String> = []
+
+        if let parameterClause = closure.signature?.parameterClause {
+            switch parameterClause {
+            case .simpleInput(let list):
+                for parameter in list { names.insert(parameter.name.text) }
+
+            case .parameterClause(let clause):
+                for parameter in clause.parameters {
+                    names.insert(parameter.secondName?.text ?? parameter.firstName.text)
+                }
+            }
+        }
+
+        let collector = BoundNameCollector()
+        collector.walk(closure.statements)
+        return names.union(collector.names)
+    }
+}
+
+/// Every name a body binds with a pattern — `let`/`var`, `if let`, `for … in`, `case let`.
+private final class BoundNameCollector: SourceAccurateSyntaxVisitor {
+    var names: Set<String> = []
+
+    override func visit(_ node: IdentifierPatternSyntax) -> SyntaxVisitorContinueKind {
+        names.insert(node.identifier.text)
         return .visitChildren
     }
 }
