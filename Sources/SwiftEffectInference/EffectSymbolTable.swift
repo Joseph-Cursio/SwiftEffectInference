@@ -116,8 +116,10 @@ public struct EffectSymbolTable: Sendable {
     public mutating func record(signature: FunctionSignature, effect: Effect) {
         record(
             shape: DeclarationShape(
-                signature: signature,
-                omittableParameters: Array(repeating: false, count: signature.argumentLabels.count)
+                name: signature.name,
+                parameters: signature.argumentLabels.map {
+                    DeclarationShape.Parameter(label: $0, hasDefault: false)
+                }
             ),
             effect: effect
         )
@@ -155,7 +157,24 @@ public struct EffectSymbolTable: Sendable {
     /// and they disagree about the effect, the lookup withdraws: guessing which overload
     /// the compiler picked would be worse than staying silent.
     public func effect(for signature: FunctionSignature) -> Effect? {
-        if let exact = entriesBySignature[signature]?.effect {
+        effect(for: CallSiteShape(signature: signature))
+    }
+
+    /// Returns the declared effect for a call site, or `nil` if no annotated declaration
+    /// answers to it (zero declarations, or withdrawn by collision).
+    ///
+    /// Prefer this over the `FunctionSignature` overload wherever the call syntax is to hand.
+    /// A call written with a trailing closure — `perform { }` against `func perform(action:)` —
+    /// has no label for that argument at all, so it cannot be found by signature alone. Swift
+    /// being made of trailing closures, looking up by bare signature is blind to a large share
+    /// of real call sites.
+    public func effect(for callSite: CallSiteShape) -> Effect? {
+        let signature = callSite.signature
+
+        // An exact signature wins, mirroring Swift's own preference for the overload that needs
+        // no defaults. Only meaningful when nothing was sugared away.
+        if callSite.trailingClosureCount == 0,
+           let exact = entriesBySignature[signature]?.effect {
             return exact
         }
         // A signature withdrawn by collision stays withdrawn — do not let shape
@@ -163,18 +182,18 @@ public struct EffectSymbolTable: Sendable {
         if isCollision(signature: signature) {
             return nil
         }
-        return effectFromDeclarationShapes(callSignature: signature)
+        return effectFromDeclarationShapes(callSite: callSite)
     }
 
-    /// The effect of the annotated declarations that could accept `callSignature`, or
-    /// `nil` when none could or when they disagree.
-    private func effectFromDeclarationShapes(callSignature: FunctionSignature) -> Effect? {
-        guard let candidates = shapesByName[callSignature.name] else { return nil }
+    /// The effect of the annotated declarations that could accept `callSite`, or `nil` when
+    /// none could or when they disagree.
+    private func effectFromDeclarationShapes(callSite: CallSiteShape) -> Effect? {
+        guard let candidates = shapesByName[callSite.signature.name] else { return nil }
 
         var matched: Set<Effect> = []
         for candidate in candidates
         where entriesBySignature[candidate.shape.signature] != nil
-            && candidate.shape.accepts(callLabels: callSignature.argumentLabels) {
+            && candidate.shape.accepts(callSite) {
             matched.insert(candidate.effect)
         }
 

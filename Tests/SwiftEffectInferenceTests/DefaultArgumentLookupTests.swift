@@ -51,8 +51,8 @@ struct DefaultArgumentLookupTests {
         let call = try #require(
             Self.calls(in: tree).first { $0.calledExpression.referenceBaseName == name }
         )
-        let signature = try #require(FunctionSignature.from(call: call))
-        return table.effect(for: signature)
+        let callSite = try #require(CallSiteShape.from(call: call))
+        return table.effect(for: callSite)
     }
 
     // MARK: - The regression
