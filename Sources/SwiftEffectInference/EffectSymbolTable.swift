@@ -202,6 +202,29 @@ public struct EffectSymbolTable: Sendable {
         upwardInferredEffects[signature]
     }
 
+    /// Body inference whose heuristic resolver does not need the enclosing file.
+    ///
+    /// The import-aware form exists because some heuristics are gated on what a file imports
+    /// (Fluent's `save`/`delete` only mean what they look like when `FluentKit` is in scope).
+    /// A resolver that consults no imports has no use for the second parameter, and saying so
+    /// is clearer than threading an ignored argument through every call site.
+    public mutating func applyBodyInference(
+        to sources: [SourceFileSyntax],
+        multiHop: Bool = false,
+        maxHops: Int = 5,
+        wallClockBudget: Duration = .seconds(30),
+        heuristicEffectForCall: @escaping (FunctionCallExprSyntax) -> Effect?
+    ) {
+        applyBodyInference(
+            to: sources,
+            multiHop: multiHop,
+            maxHops: maxHops,
+            wallClockBudget: wallClockBudget
+        ) { call, _ in
+            heuristicEffectForCall(call)
+        }
+    }
+
     /// Resolved-with-provenance lookup. Returns the most authoritative
     /// effect known for `signature` along with the path that produced it.
     /// Order: declared > upward-inferred > nil. Heuristic-downward is not
