@@ -114,6 +114,53 @@ public struct PurityInferrer: Sendable {
         return !mutatesCapturedState(closure)
     }
 
+    /// Whether a **computed property's getter** is referentially transparent.
+    ///
+    /// Callers need this to answer a question the function and closure forms cannot: *is reading
+    /// `self.totalChunks` an impurity?* A consumer that only knows about stored properties must
+    /// answer "yes, possibly" for every computed one — a computed `var` can read anything at all —
+    /// and that answer is far too coarse. `var totalChunks: Int { (byteCount + chunkSize - 1) /
+    /// chunkSize }` reads two `let`s and is exactly as pure as they are. Refusing it made the linter
+    /// refuse the very value type it had just told a reader to extract.
+    ///
+    /// **This answers only the effect question — markers and totality — and deliberately not the
+    /// state question.** Whether the names the getter reads are themselves immutable is a fact about
+    /// the enclosing type, which this leaf cannot see; the caller resolves that. The division matters
+    /// for soundness in one specific way: `var now: Date { Date() }` reads no mutable *state* at all,
+    /// so a caller checking only names would wave it through. It is the **marker** scan here that
+    /// refutes it.
+    ///
+    /// A setter, `willSet` or `didSet` refutes outright: a property with one is either observed
+    /// stored state or a two-way channel, and neither is a value derived from `self`.
+    public func isPure(_ accessor: AccessorBlockSyntax) -> Bool {
+        switch accessor.accessors {
+        case .getter(let statements):
+            // The shorthand `var x: Int { … }` — the body IS the getter.
+            return isPureBody(Syntax(statements))
+
+        case .accessors(let list):
+            var getterBody: Syntax?
+            for declaration in list {
+                switch declaration.accessorSpecifier.tokenKind {
+                case .keyword(.get):
+                    guard let body = declaration.body else { return false }
+                    getterBody = Syntax(body.statements)
+
+                default:
+                    // `set`, `willSet`, `didSet`, `_modify`, … — not a derived value.
+                    return false
+                }
+            }
+            guard let getterBody else { return false }
+            return isPureBody(getterBody)
+        }
+    }
+
+    /// The effect half of purity, over any body: no I/O, no nondeterminism, and nothing that traps.
+    private func isPureBody(_ syntax: Syntax) -> Bool {
+        !hasRefutingMarker(in: syntax) && isTotal(syntax)
+    }
+
     /// Whether the closure assigns to anything it did not itself declare — the one thing a capture
     /// can do that no extraction can rescue.
     private func mutatesCapturedState(_ closure: ClosureExprSyntax) -> Bool {
