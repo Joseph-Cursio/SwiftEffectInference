@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/Effect.swift b/Sources/SwiftEffectInference/Effect.swift
+index dbcff1f..0693b4c 100644
+--- a/Sources/SwiftEffectInference/Effect.swift
++++ b/Sources/SwiftEffectInference/Effect.swift
+@@ -86,7 +86,7 @@ public enum Effect: Hashable, Sendable {
+         switch self {
+         case .pure: return 0
+         case .observational: return 1
+-        case .idempotent: return 2
++        case .idempotent: return 1
+         case .externallyIdempotent: return 3
+         case .nonIdempotent: return 4
+         }

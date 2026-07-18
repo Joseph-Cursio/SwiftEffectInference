@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/PurityInferrer.swift b/Sources/SwiftEffectInference/PurityInferrer.swift
+index 744da9c..d87dc4b 100644
+--- a/Sources/SwiftEffectInference/PurityInferrer.swift
++++ b/Sources/SwiftEffectInference/PurityInferrer.swift
+@@ -60,7 +60,7 @@ public struct PurityInferrer: Sendable {
+     private static let nondeterministicMarkers: Set<String> = [
+         "arc4random", "arc4random_uniform", "drand48", "CFAbsoluteTimeGetCurrent",
+         "random", "randomElement", "shuffled",
+-        "Date", "UUID"
++        "UUID"
+     ]
+ 
+     /// Returns `.pure` when `function` is referentially transparent — its

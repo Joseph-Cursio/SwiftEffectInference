@@ -1,0 +1,30 @@
+{
+  "kind": "spm",
+  "note": "Private mutation/regression corpus for SwiftEffectInference — the shared leaf (effect lattice + purity inferrer) dogfooding on itself (Chapter 30 §30.4.4). Mutants live in the library's own source; each is killed by the library's own tests. Run via `swift test --filter`. Not a scored benchmark.",
+  "mutants": [
+    {
+      "id": "lub-returns-safer",
+      "patch": "patches/lub-returns-safer.patch",
+      "shape": "lattice-join",
+      "expected": "killed",
+      "test": "lub_dominatesBothInputs",
+      "label": "lub returns the lower-rank (safer) effect instead of the higher — a join that no longer dominates its inputs, laundering a dangerous effect into a safe grade"
+    },
+    {
+      "id": "rank-collision",
+      "patch": "patches/rank-collision.patch",
+      "shape": "lattice-rank",
+      "expected": "killed",
+      "test": "rank_matchesExpectedOrdering",
+      "label": "idempotent and observational collide at rank 1 — the five-tier chain is no longer a total order"
+    },
+    {
+      "id": "purity-admits-date",
+      "patch": "patches/purity-admits-date.patch",
+      "shape": "purity-inference",
+      "expected": "killed",
+      "test": "nondeterminismIsImpure",
+      "label": "drop Date from the nondeterminism markers — `Date()` is classified pure, the exact unearned-purity the inferrer exists to refute"
+    }
+  ]
+}

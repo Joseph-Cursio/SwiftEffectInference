@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/Effect.swift b/Sources/SwiftEffectInference/Effect.swift
+index dbcff1f..c49ae74 100644
+--- a/Sources/SwiftEffectInference/Effect.swift
++++ b/Sources/SwiftEffectInference/Effect.swift
+@@ -101,7 +101,7 @@ public enum Effect: Hashable, Sendable {
+     /// consistent with SwiftProjectLint's collection-form lub (first in
+     /// iteration order wins for same-rank duplicates).
+     public func lub(_ other: Effect) -> Effect {
+-        return rank >= other.rank ? self : other
++        return rank <= other.rank ? self : other
+     }
+ 
+     /// Collection-form least-upper-bound. Returns the most-permissive effect
