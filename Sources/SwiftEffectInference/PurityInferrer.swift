@@ -1,5 +1,44 @@
 import SwiftSyntax
 
+/// How far a function gets toward `Effect.pure` — the two clauses separated,
+/// because two consumers need different halves and answering with one `Bool`
+/// made them disagree.
+///
+/// `.pure` is a *conjunction*: referentially transparent **and** total. Those
+/// are different properties, and `throws` refutes only the second one. Collapse
+/// them and a throwing-but-otherwise-transparent function is indistinguishable
+/// from one that reads the clock — which is exactly the confusion that cost the
+/// SwiftLintRuleStudio road test its highest-value law. `serialize(_:) throws ->
+/// String` is a deterministic function of its argument; the linter's seed rule
+/// refused to name it, so SwiftInferProperties — which vouches for purity *via
+/// the seed* and only checks shape itself — never got the chance to propose the
+/// law it already knew how to write.
+///
+/// So the verdict says which clause failed, and each consumer decides what it
+/// can live with:
+///
+/// - **A law that must hold on every input** (an `@lint.effect pure` claim, a
+///   `couldBePrivateMember` narrowing) needs `.pure`.
+/// - **A law whose domain can be narrowed to the success set** — determinism as
+///   `(try? f(x)) == (try? f(x))`, a round trip caveated to inputs that parse —
+///   is satisfied by `.pureButPartial` too.
+///
+/// The distinction is *only* about partiality. A `.pureButPartial` function has
+/// passed every impurity and nondeterminism refuter; it simply has no answer for
+/// part of its domain.
+public enum PurityVerdict: Sendable, Equatable {
+    /// Referentially transparent and total: `.pure` on the effect lattice.
+    case pure
+
+    /// Referentially transparent but **partial** — it `throws`, so it is
+    /// undefined on some inputs. Deterministic where it is defined.
+    case pureButPartial
+
+    /// Not referentially transparent: an impurity or nondeterminism refuter
+    /// fired, or the shape could not be inspected at all.
+    case refuted
+}
+
 /// Infers whether a function is `Effect.pure` — referentially transparent:
 /// no side effects, deterministic, and total (a function of its inputs alone).
 ///
@@ -72,16 +111,41 @@ public struct PurityInferrer: Sendable {
     /// effect, and a `throws` function has no return value for the inputs that
     /// throw, so it is not total over its domain. A body-less declaration (a
     /// protocol requirement) is refuted — there is nothing to inspect.
+    ///
+    /// **The two refuters are not the same kind of thing**, and a caller that
+    /// can narrow a law's domain should ask `verdict(for:)` instead: it separates
+    /// the throwing case out as `.pureButPartial` rather than folding it in with
+    /// the clock readers. This method's answer is deliberately unchanged — it is
+    /// the right question for a claim that must hold over the whole domain.
     public func inferredEffect(for function: FunctionDeclSyntax) -> Effect? {
-        guard let body = function.body else { return nil }
-        guard isSynchronousAndNonThrowing(function.signature) else { return nil }
-        guard !bodyHasRefutingMarker(body), bodyIsTotal(body) else { return nil }
-        return .pure
+        verdict(for: function) == .pure ? .pure : nil
     }
 
     /// Convenience boolean form of `inferredEffect(for:)`.
     public func isPure(_ function: FunctionDeclSyntax) -> Bool {
         inferredEffect(for: function) == .pure
+    }
+
+    /// The full verdict — which clause of purity `function` satisfies.
+    ///
+    /// Prefer this over `isPure(_:)` when the caller can narrow a law's domain
+    /// to the inputs that do not throw; see `PurityVerdict`. `isPure(_:)` and
+    /// `inferredEffect(for:)` remain the right question for a caller that needs
+    /// a claim holding over the whole domain, and their answers are unchanged by
+    /// this method's existence: both are `verdict(for:) == .pure`.
+    ///
+    /// `async` still refutes outright rather than yielding `.pureButPartial`.
+    /// The two are not parallel: `throws` narrows a function's *domain* while
+    /// leaving it a deterministic function of the inputs it accepts, whereas an
+    /// `async` body awaits an effect — there is no sub-domain on which it is
+    /// referentially transparent. (Clock-determinism is a separate, *declared*
+    /// claim; see `EffectAnnotationParser`.)
+    public func verdict(for function: FunctionDeclSyntax) -> PurityVerdict {
+        guard let body = function.body else { return .refuted }
+        guard function.signature.effectSpecifiers?.asyncSpecifier == nil else { return .refuted }
+        guard !bodyHasRefutingMarker(body), bodyIsTotal(body) else { return .refuted }
+        guard function.signature.effectSpecifiers?.throwsClause != nil else { return .pure }
+        return throwsOnlyItsOwnErrors(body) ? .pureButPartial : .refuted
     }
 
     /// Whether a **closure literal** is referentially transparent — the same refuters as a
@@ -171,11 +235,6 @@ public struct PurityInferrer: Sendable {
 
     // MARK: - Refutation predicates
 
-    private func isSynchronousAndNonThrowing(_ signature: FunctionSignatureSyntax) -> Bool {
-        signature.effectSpecifiers?.asyncSpecifier == nil
-            && signature.effectSpecifiers?.throwsClause == nil
-    }
-
     private func bodyHasRefutingMarker(_ body: CodeBlockSyntax) -> Bool {
         hasRefutingMarker(in: Syntax(body))
     }
@@ -202,6 +261,52 @@ public struct PurityInferrer: Sendable {
     /// over generated inputs would hit a crash rather than a falsified law.
     private func bodyIsTotal(_ body: CodeBlockSyntax) -> Bool {
         isTotal(Syntax(body))
+    }
+
+    /// Whether every way `body` can throw is one it raises *itself* — a `throw`
+    /// of its own, and no `try` into a callee.
+    ///
+    /// This is what keeps `.pureButPartial` sound, and the reason it is needed is
+    /// worth stating plainly: **`throws` was doing double duty as an impurity
+    /// refuter, and the marker set had come to rely on it.** Nearly all real I/O
+    /// in Swift throws, so gating on `throws` masked every marker the set does
+    /// not name — `Process`, `Pipe`, `FileHandle`, `String(contentsOf:)`,
+    /// `Data(contentsOf:)`, the SQLite surface. Relaxing `throws` without this
+    /// second gate re-admitted all of them at once: a subprocess-spawning
+    /// `runSwiftLint(executable:workingDirectory:lintFile:)` was judged pure,
+    /// which is the lattice-bottom mistake the type's soundness note forbids.
+    ///
+    /// The distinction that survives the evidence is *where the error comes from*:
+    ///
+    /// - `guard let value = Int(text) else { throw ParseError.bad }` — the
+    ///   function rejects an input it cannot map. It is a deterministic function
+    ///   of its inputs on the rest of its domain. **Partial, and pure.**
+    /// - `try process.run()`, `try String(contentsOf: url)` — the throw comes
+    ///   from a callee this leaf cannot see, and so does whatever else the callee
+    ///   does. **Doubt, and doubt refutes.**
+    ///
+    /// `try?` and `try!` count as propagation too: they still call something that
+    /// throws. (`try!` is separately refuted by the totality checker.) The cost of
+    /// this gate is a pure function that happens to call another pure throwing
+    /// function — refused for want of the cross-file view a leaf does not have.
+    /// That is the sound direction, and `EffectSymbolTable` is where a caller with
+    /// the whole program in hand can do better.
+    private func throwsOnlyItsOwnErrors(_ body: CodeBlockSyntax) -> Bool {
+        let checker = TryExpressionChecker()
+        checker.walk(body)
+        return !checker.sawTry
+    }
+}
+
+/// Detects any `try` — the mark of a throw propagated from a callee rather than
+/// raised by the function itself.
+private final class TryExpressionChecker: SourceAccurateSyntaxVisitor {
+
+    private(set) var sawTry = false
+
+    override func visit(_ node: TryExprSyntax) -> SyntaxVisitorContinueKind {
+        sawTry = true
+        return .skipChildren
     }
 }
 
