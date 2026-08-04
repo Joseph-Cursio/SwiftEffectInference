@@ -117,8 +117,34 @@ public struct PurityInferrer: Sendable {
     /// the throwing case out as `.pureButPartial` rather than folding it in with
     /// the clock readers. This method's answer is deliberately unchanged — it is
     /// the right question for a claim that must hold over the whole domain.
+    /// **Deliberately not `verdict(for:) == .pure`**, though the answers are
+    /// identical and a test pins that they stay so.
+    ///
+    /// `verdict` must walk the body of a *throwing* function — separating
+    /// `.pureButPartial` from `.refuted` is the only thing that walk is for. This
+    /// method asks the **whole-domain** question, for which `throws` is
+    /// disqualifying outright, so it can reject on the signature before any
+    /// traversal. Delegating cost the two a shared hot path they do not share a
+    /// question with: measured at **~2× on the whole-domain path** across five
+    /// independent budgets in SwiftInferProperties (2.00–2.20×), because Swift
+    /// corpora — test code especially — are dense with `throws`, and every one of
+    /// those functions was paying two full body walks to reach a verdict its
+    /// signature already settled. See
+    /// [SwiftEffectInference#1](https://github.com/Joseph-Cursio/SwiftEffectInference/issues/1).
+    ///
+    /// Two entry points with different costs because they answer different
+    /// questions, which is the same argument `PurityVerdict`'s own doc makes for
+    /// separating them at all.
     public func inferredEffect(for function: FunctionDeclSyntax) -> Effect? {
-        verdict(for: function) == .pure ? .pure : nil
+        guard let body = function.body else { return nil }
+        // The cheap rejections first, and `throws` belongs among them HERE even
+        // though it cannot be there in `verdict`.
+        guard function.signature.effectSpecifiers?.asyncSpecifier == nil,
+              function.signature.effectSpecifiers?.throwsClause == nil else {
+            return nil
+        }
+        guard !bodyHasRefutingMarker(body), bodyIsTotal(body) else { return nil }
+        return .pure
     }
 
     /// Convenience boolean form of `inferredEffect(for:)`.
