@@ -58,9 +58,14 @@ public struct EffectAnnotationParser: Sendable {
 
         /// Default recognition set, matching `swiftidempotency`'s shipped
         /// macros (all five effect-family names ship there as of
-        /// 2026-07-10, `@Pure` included; the orthogonal `@ClockDeterministic`
-        /// marker also ships there but is recognized via
-        /// `isClockDeterministic(declaration:)`, not this set).
+        /// 2026-07-10, `@Pure` included).
+        ///
+        /// **Two markers ship there and are deliberately NOT in this set**, each
+        /// because it is not a tier in this module's linear `Effect`:
+        /// `@ClockDeterministic` (read via `isClockDeterministic(declaration:)`)
+        /// and `@EffectUnknown` (via `declaresUnknownEffect(declaration:)`). Both
+        /// answer their own question with their own predicate rather than being
+        /// mapped onto a tier they do not occupy.
         public static let `default` = AttributeRecognition(
             idempotent: ["Idempotent"],
             nonIdempotent: ["NonIdempotent"],
@@ -430,6 +435,77 @@ extension EffectAnnotationParser {
     /// Convenience for callers that don't customize attribute recognition.
     public static func isClockDeterministic(declaration: FunctionDeclSyntax) -> Bool {
         EffectAnnotationParser().isClockDeterministic(declaration: declaration)
+    }
+
+    /// Whether the author has declared the effect **cannot be determined**.
+    ///
+    /// SwiftIdempotency's `unknown` tier had been in the reference lattice from
+    /// the start and was **inference-only** — no spelling, so an author who meant
+    /// *"I cannot guarantee idempotency here"* had no way to write it down. The
+    /// nearest sayable thing was `@NonIdempotent`, which claims something strictly
+    /// stronger: *unconditionally* non-idempotent, re-invocation producing
+    /// additional observable effects. `@EffectUnknown` closes that gap.
+    ///
+    /// **Deliberately not an `Effect` case, and not projected onto one.**
+    /// `unknown` is *incomparable* to `non_idempotent`, so admitting it to this
+    /// module's `Effect` would force a linear five-tier chain into a genuine
+    /// partial order and replace the rank-only `lub(_:)` with a Hasse-diagram
+    /// join. Note the contrast with `transactional_idempotent` a few lines up in
+    /// `extractEffect`: that one *is* projected, conservatively, onto
+    /// `.nonIdempotent`, because it is a claim that some tier holds. `unknown`
+    /// is the absence of such a claim — projecting it would manufacture
+    /// information the author explicitly declined to give.
+    ///
+    /// So it is read the way `@ClockDeterministic` is: its own predicate, outside
+    /// `AttributeRecognition`, answering its own question.
+    ///
+    /// **What this changes for a caller.** Before this existed, `parseEffect`
+    /// returned `nil` for `@lint.effect unknown` — the same answer it gives for an
+    /// unannotated declaration and for a misspelled tier. A consumer could not
+    /// distinguish *"the author said they do not know"* from *"the author said
+    /// nothing"*, which is the whole content of the marker.
+    ///
+    /// Grammar mirrors the effect annotation's two forms:
+    /// - doc comment: `/// @lint.effect unknown` — the `@lint.effect` namespace,
+    ///   because `unknown` **is** a tier name in SwiftIdempotency's lattice even
+    ///   though it is not one in this module's `Effect`;
+    /// - attribute: `@EffectUnknown`.
+    ///
+    /// Content-blind like every annotation here: presence is a claim for human
+    /// review, not an analysis result.
+    public func declaresUnknownEffect(declaration: FunctionDeclSyntax) -> Bool {
+        hasEffectUnknownAttribute(declaration.attributes)
+            || Self.hasUnknownEffectDocComment(Self.combinedDocTrivia(for: declaration))
+    }
+
+    /// Same combined-position scan for variable bindings (handler-style
+    /// closures), mirroring `parseEffect(declaration:)`.
+    public func declaresUnknownEffect(declaration: VariableDeclSyntax) -> Bool {
+        hasEffectUnknownAttribute(declaration.attributes)
+            || Self.hasUnknownEffectDocComment(Self.combinedDocTrivia(for: declaration))
+    }
+
+    /// Convenience for callers that don't customize attribute recognition.
+    public static func declaresUnknownEffect(declaration: FunctionDeclSyntax) -> Bool {
+        EffectAnnotationParser().declaresUnknownEffect(declaration: declaration)
+    }
+
+    /// Names recognized as the unknown-effect marker attribute.
+    static let effectUnknownAttributeNames: Set<String> = ["EffectUnknown"]
+
+    private func hasEffectUnknownAttribute(_ attributes: AttributeListSyntax) -> Bool {
+        attributes.contains { element in
+            guard let attr = element.as(AttributeSyntax.self),
+                  let name = Self.attributeTypeName(attr.attributeName) else { return false }
+            return Self.effectUnknownAttributeNames.contains(name)
+        }
+    }
+
+    private static func hasUnknownEffectDocComment(_ trivia: Trivia) -> Bool {
+        docCommentLines(from: trivia).contains { line in
+            guard let range = line.range(of: "@lint.effect") else { return false }
+            return line[range.upperBound...].trimmingLeadingWhitespace().firstWord() == "unknown"
+        }
     }
 
     /// Names recognized as the clock-determinism marker attribute.
