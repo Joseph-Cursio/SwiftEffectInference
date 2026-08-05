@@ -158,6 +158,30 @@ public enum CallSiteEffectInferrer {
 
         let context = FrameworkContext(imports: imports, enabled: enabledFrameworks)
 
+        // Split in two at the precision boundary, purely for the body-length cap.
+        // **The `??` is safe only because the first half never returns `nil` as a
+        // SUPPRESSION.** Two later rules do — the stdlib-collection exclusions in the
+        // bare-name whitelist and the prefix match — and a suppressing `nil` reaching
+        // `??` would fall through to a broader rule and change the verdict. Both live
+        // in `nameGatedInference`, so the short-circuit stays inside one function.
+        return frameworkGatedInference(
+            call: call, calleeName: calleeName, receiverName: receiverName, context: context
+        ) ?? nameGatedInference(
+            call: call, calleeName: calleeName, receiverName: receiverName, context: context
+        )
+    }
+
+    /// The high-precision half of the decision tree: rules that require a
+    /// framework import, a receiver shape, or both. **Never returns `nil` to mean
+    /// "suppress"** — only to mean "no rule here matched", which is what lets
+    /// `resolve` chain it with `??`.
+    private static func frameworkGatedInference(
+        call: FunctionCallExprSyntax,
+        calleeName: String,
+        receiverName: String?,
+        context: FrameworkContext
+    ) -> Inference? {
+
         // Observational requires a logger-shaped receiver AND a log-level
         // method name. Two strong signals — high precision; not gated by
         // import. swift-log is commonly accessed transitively through
@@ -264,6 +288,20 @@ public enum CallSiteEffectInferrer {
             )
         }
 
+        return nil
+    }
+
+    /// The broader half: bare-name whitelists and prefix matching, plus the
+    /// framework-gated method rules that need no receiver. **Contains the
+    /// suppressing `nil`s** — a stdlib-collection receiver cancels a bare-name or
+    /// prefix match outright rather than deferring to a later rule, and keeping
+    /// those together preserves that short-circuit.
+    private static func nameGatedInference(
+        call: FunctionCallExprSyntax,
+        calleeName: String,
+        receiverName: String?,
+        context: FrameworkContext
+    ) -> Inference? {
         // Bare-name whitelists — now receiver-type gated. If the receiver
         // resolves to a stdlib collection whose (type, method) pair is in
         // the exclusion table, the bare-name match is suppressed. Named
