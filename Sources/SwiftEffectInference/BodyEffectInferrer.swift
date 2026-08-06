@@ -10,12 +10,62 @@ import SwiftSyntax
 /// - `depth: 2+` means at least one lub-contributing callee was itself
 ///   upward-inferred (multi-hop fixed-point).
 public struct BodyInference: Sendable, Equatable {
+
+    /// What the chain justifying this effect bottoms out on.
+    ///
+    /// `depth` says how *far* an inference travelled; this says what it stood
+    /// on when it got there, and the two are independent. A one-hop inference
+    /// anchored on a name guess is weaker evidence than a four-hop one anchored
+    /// entirely on annotations, and before this existed a consumer could not
+    /// tell them apart.
+    ///
+    /// **Why a consumer needs it.** SwiftInferProperties' `EffectResolver` runs
+    /// its own upward inference with the heuristic classifier switched off,
+    /// because it *"guesses effects for unannotated callees from their NAMES —
+    /// the shape of inference this repo has repeatedly measured as a precision
+    /// cost — and a veto built on a name guess would suppress a true law because
+    /// a callee was called `save`."* That forces a choice between one-hop
+    /// declaration-anchored inference and no inference at all: SwiftProjectLint
+    /// resolves multi-hop across files, but supplies `HeuristicEffectInferrer`
+    /// as its anchor resolver, so its results could not be trusted wholesale.
+    /// With this field the consumer can take the multi-hop reach it cannot
+    /// compute for itself *and* keep the precision stance it already decided on.
+    public enum Anchor: Sendable, Equatable {
+        /// Every step that justifies this effect was a human annotation.
+        case declared
+
+        /// At least one step that justifies this effect came from a name or
+        /// framework heuristic. Not a claim that the effect is wrong — only
+        /// that a guess is load-bearing in reaching it.
+        case heuristic
+
+        /// `declared` outranks `heuristic`: if any single justification for a
+        /// value rests entirely on annotations, the value is annotation-backed,
+        /// and a redundant guess alongside it changes nothing.
+        static func strongest(_ lhs: Anchor, _ rhs: Anchor) -> Anchor {
+            lhs == .declared || rhs == .declared ? .declared : .heuristic
+        }
+    }
+
     public let effect: Effect
     public let depth: Int
 
-    public init(effect: Effect, depth: Int) {
+    /// What this inference rests on. See `Anchor`.
+    public let anchor: Anchor
+
+    /// `anchor` defaults to `.heuristic`, which is the conservative reading and
+    /// deliberately not the flattering one.
+    ///
+    /// A caller that constructs a `BodyInference` without saying what it stands
+    /// on has not established that annotations back it, and the default must be
+    /// the answer that withholds trust rather than the one that grants it. The
+    /// cost of the wrong default here is asymmetric: `.declared` would let a
+    /// name guess travel to a consumer wearing an annotation's authority, which
+    /// is the precise failure this field exists to prevent.
+    public init(effect: Effect, depth: Int, anchor: Anchor = .heuristic) {
         self.effect = effect
         self.depth = depth
+        self.anchor = anchor
     }
 }
 
@@ -115,11 +165,27 @@ public enum BodyEffectInferrer {
             return nil
         }
         let lubRank = lub.rank
-        let contributingDepths = calleeResults
-            .filter { $0.effect.rank == lubRank }
-            .map { $0.depth }
-        let depth = 1 + (contributingDepths.max() ?? 0)
-        return BodyInference(effect: lub, depth: depth)
+        let contributors = calleeResults.filter { $0.effect.rank == lubRank }
+        let depth = 1 + (contributors.map { $0.depth }.max() ?? 0)
+        // Anchor is decided by the lub's contributors alone, for the same reason
+        // depth is: a callee whose effect is *below* the lub did not determine
+        // the answer, so what it rested on cannot taint the answer. An
+        // `idempotent` name guess sitting beside a declared `non_idempotent`
+        // changes nothing about why the lub is `non_idempotent`.
+        //
+        // Among those contributors, `strongest` wins rather than weakest —
+        // **and this is the part to check if the field ever looks wrong.** Two
+        // callees both resolving `non_idempotent`, one declared and one guessed,
+        // yield a lub the declaration alone fully justifies; the guess is
+        // redundant, and marking the result `heuristic` because a redundant
+        // guess was present would withhold trust from a conclusion annotations
+        // had already earned. The guess only matters when it is the *only*
+        // thing holding the lub up, which is exactly the case `strongest`
+        // leaves as `.heuristic`.
+        let anchor = contributors
+            .map { $0.anchor }
+            .reduce(BodyInference.Anchor.heuristic, BodyInference.Anchor.strongest)
+        return BodyInference(effect: lub, depth: depth, anchor: anchor)
     }
 
     private static func collectResults(

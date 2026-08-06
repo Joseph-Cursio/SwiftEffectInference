@@ -339,14 +339,24 @@ public struct EffectSymbolTable: Sendable {
                     if let sig = FunctionSignature.from(call: call) {
                         if isCollision(signature: sig) { return nil }
                         if let declared = self.effect(for: sig) {
-                            return BodyInference(effect: declared, depth: 0)
+                            // The one anchor a human wrote. Everything that
+                            // reaches a conclusion through here, and only
+                            // through here, is annotation-backed.
+                            return BodyInference(effect: declared, depth: 0, anchor: .declared)
                         }
                         if includeUpward, let upward = self.upwardInference(for: sig) {
+                            // Inherits whatever the prior pass established —
+                            // an anchor is a property of the whole chain, so a
+                            // multi-hop result is only as clean as the step it
+                            // stood on.
                             return upward
                         }
                     }
                     if let heuristic = heuristicEffectForCall(call, source) {
-                        return BodyInference(effect: heuristic, depth: 0)
+                        // A name or framework match. Correct often enough to be
+                        // worth having and wrong often enough that a consumer
+                        // must be able to decline it.
+                        return BodyInference(effect: heuristic, depth: 0, anchor: .heuristic)
                     }
                     return nil
                 }
@@ -354,7 +364,9 @@ public struct EffectSymbolTable: Sendable {
             for (sig, result) in inferred {
                 guard entriesBySignature[sig]?.effect == nil else { continue }
                 let cappedDepth = min(maxHops, result.depth)
-                let cappedResult = BodyInference(effect: result.effect, depth: cappedDepth)
+                let cappedResult = BodyInference(
+                    effect: result.effect, depth: cappedDepth, anchor: result.anchor
+                )
                 upwardInferredEffects[sig] = mergedInference(
                     existing: upwardInferredEffects[sig],
                     incoming: cappedResult
@@ -374,7 +386,21 @@ public struct EffectSymbolTable: Sendable {
         guard let existing else { return incoming }
         let mergedEffect = existing.effect.lub(incoming.effect)
         let mergedDepth = max(existing.depth, incoming.depth)
-        return BodyInference(effect: mergedEffect, depth: mergedDepth)
+        // The anchor follows the *effect*, not the depth, because it is a claim
+        // about what justifies the value being reported. When one side's effect
+        // wins the lub outright, only that side's justification is in play; the
+        // loser's anchor describes a value nobody is reporting. On a tie the
+        // stronger anchor wins, matching `combine`: either justification alone
+        // supports the same value, so an annotation-backed one is available.
+        let mergedAnchor: BodyInference.Anchor
+        if incoming.effect.rank > existing.effect.rank {
+            mergedAnchor = incoming.anchor
+        } else if existing.effect.rank > incoming.effect.rank {
+            mergedAnchor = existing.anchor
+        } else {
+            mergedAnchor = BodyInference.Anchor.strongest(existing.anchor, incoming.anchor)
+        }
+        return BodyInference(effect: mergedEffect, depth: mergedDepth, anchor: mergedAnchor)
     }
 }
 
