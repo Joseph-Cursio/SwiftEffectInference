@@ -174,4 +174,54 @@ struct ClosurePurityTests {
         }
         """) == false)
     }
+
+    // MARK: - The capture-write clause, asked on its own
+
+    private func mutatesCapture(_ source: String) throws -> Bool {
+        PurityInferrer().mutatesCapturedState(try closure(in: source))
+    }
+
+    @Test("the clause answers the capture question alone, not the purity question")
+    func clauseIsIndependentOfTheOtherRefuters() throws {
+        // The reason this is published separately: every one of these is impure, and none of them
+        // writes to a capture. A caller inverting `isPure` to find captured writes gets all three
+        // wrong.
+        for source in [
+            "items.forEach { item in print(item) }",
+            "let stamped = items.map { item in Date() }",
+            "let names = items.map { item in item.name! }"
+        ] {
+            #expect(try isPure(source) == false)
+            #expect(try mutatesCapture(source) == false)
+        }
+    }
+
+    @Test("the clause agrees with isPure when the capture write is the only refuter")
+    func clauseAgreesWhenItIsTheOnlyRefuter() throws {
+        let source = """
+        items.forEach { item in
+            total += item.amount
+        }
+        """
+        #expect(try mutatesCapture(source))
+        #expect(try isPure(source) == false)
+    }
+
+    @Test("reading a capture is not mutating one")
+    func readingACaptureDoesNotMutate() throws {
+        #expect(try mutatesCapture("""
+        let children = files.filter { file in
+            file.path.hasPrefix(currentPath)
+        }
+        """) == false)
+    }
+
+    @Test("the clause sees writes through a captured object")
+    func writingThroughACaptureMutates() throws {
+        #expect(try mutatesCapture("""
+        items.forEach { item in
+            cache.count = item.amount
+        }
+        """))
+    }
 }

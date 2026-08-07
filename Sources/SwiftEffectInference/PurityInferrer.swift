@@ -253,7 +253,23 @@ public struct PurityInferrer: Sendable {
 
     /// Whether the closure assigns to anything it did not itself declare — the one thing a capture
     /// can do that no extraction can rescue.
-    private func mutatesCapturedState(_ closure: ClosureExprSyntax) -> Bool {
+    ///
+    /// **Published separately from `isPure(_ closure:)` because a caller can want this clause
+    /// alone.** `isPure` folds four refuters into one Bool — `async`/`throws`, impurity markers,
+    /// totality, and this — which answers "may I property-test it?" and nothing else. Inverting that
+    /// Bool does *not* yield this predicate: `{ print(x) }` is impure and mutates no capture.
+    ///
+    /// The caller this exists for is the opposite question. `isPure` uses a captured write to
+    /// *refute* a claim, so over-reporting one is free — the cost is a missed candidate. A caller
+    /// asking "does this closure's effect escape into captured state?" is making a **positive**
+    /// claim, and pays for a wrong answer with a wrong assertion. Both need the same verdict; only
+    /// one of them can afford to approximate it, which is why the flat-scope caveat on
+    /// `BoundNameCollector` is worth reading before consuming this.
+    ///
+    /// Returns `false` for a closure that only *reads* what it captured. That is the interesting
+    /// half of the definition and the reason this is not simply "does it touch a capture": a read
+    /// capture becomes a parameter under extraction, and a written one does not.
+    public func mutatesCapturedState(_ closure: ClosureExprSyntax) -> Bool {
         let checker = CaptureMutationChecker(closure: closure, viewMode: .sourceAccurate)
         checker.walk(closure.statements)
         return checker.mutatesCapture
