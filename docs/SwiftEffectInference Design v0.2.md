@@ -328,7 +328,7 @@ Things this document does not commit to and that the v0.1 implementation will no
 
 ## 13. References
 
-- SwiftInferProperties PRD v0.3 — `Joseph-Cursio/SwiftInferProperties/docs/SwiftInferProperties PRD v0.3.md` §4.1 (effect-tier counter-signals), §10 (architectural responsibility table).
+- SwiftInferProperties PRD — `SwiftInferProperties/docs/SwiftInferProperties PRD v1.0.md` §4.1 (effect-tier counter-signals), §10 (architectural responsibility table). (This named `SwiftInferProperties PRD v0.3.md` until 2026-08-07; the v0.1–v0.4 drafts were retired in that repo's `745b76b`. Both section numbers are unchanged in v1.0 — §4.1 Signals, §10 Architecture Overview.)
 - SwiftProjectLint — `Joseph-Cursio/SwiftProjectLint/Packages/SwiftProjectLintVisitors/` (current home of the engines being lifted; renamed during migration step 4).
 - swiftidempotency — `Joseph-Cursio/swiftidempotency/Sources/SwiftIdempotency/Attributes.swift` (the attribute grammar this core parses by default).
 - 2026-04-30 conversation log — option-(c) decision rationale and §11 sign-off.
