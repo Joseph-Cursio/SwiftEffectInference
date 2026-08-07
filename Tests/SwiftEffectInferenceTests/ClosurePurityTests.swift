@@ -93,6 +93,59 @@ struct ClosurePurityTests {
         """))
     }
 
+    // MARK: - Locals bound by a nested closure
+
+    @Test("a nested reduce(into:) accumulator is a local, not a capture")
+    func nestedAccumulatorIsPure() throws {
+        // `acc` is the inner closure's own `inout` parameter. Before nested parameters were
+        // collected, only the *outer* closure's parameters counted as local, so this read as a
+        // captured write — and the whole point of `reduce(into:)` is that the accumulator is local.
+        #expect(try isPure("""
+        let totals = groups.map { group in
+            group.values.reduce(into: 0) { acc, value in acc += value }
+        }
+        """))
+    }
+
+    @Test("writing through a nested closure's named parameter is not a captured write")
+    func nestedNamedParameterIsPure() throws {
+        #expect(try isPure("""
+        let counts = groups.map { group in
+            group.rows.map { (row: Row) in row.width }
+        }
+        """))
+    }
+
+    @Test("writing through $0 is not a captured write")
+    func shorthandParameterIsPure() throws {
+        // A named parameter was always fair game; `$0` is the same thing spelled differently.
+        #expect(try isPure("let widened = rows.map { $0.width = 10 }"))
+    }
+
+    @Test("a projected value is still a capture, despite the $")
+    func projectedValueIsImpure() throws {
+        // `$isPresented` is a Binding reaching out of the closure, not a shorthand parameter. Only
+        // `$` followed by digits is a parameter.
+        #expect(try isPure("""
+        rows.forEach { row in
+            $isPresented.wrappedValue = true
+        }
+        """) == false)
+    }
+
+    @Test("a captured write is still refuted when a nested closure is present")
+    func captureWriteBesideNestedClosureIsImpure() throws {
+        // The guard against the fix over-reaching: `total` is captured, and the nested closure
+        // binding `value` must not launder it.
+        #expect(try isPure("""
+        groups.forEach { group in
+            total += group.values.reduce(0) { running, value in running + value }
+        }
+        """) == false)
+    }
+
+    // MARK: - Effect and totality refuters
+
     @Test("a closure doing I/O is not pure")
     func sideEffectIsImpure() throws {
         #expect(try isPure("""
