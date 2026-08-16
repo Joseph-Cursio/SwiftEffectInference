@@ -52,9 +52,11 @@ struct ClockDeterminismRefutationTests {
 
     @Test("Date(timeIntervalSinceNow:) is an offset from now, so it reads it too")
     func dateSinceNow_refutes() throws {
+        // Named under its own spelling rather than folded into `Date()`, so the
+        // witness points at the initializer the author actually wrote.
         #expect(try marker(of: """
         func soon() -> Date { Date(timeIntervalSinceNow: 60) }
-        """) == "Date()")
+        """) == "Date(timeIntervalSinceNow:)")
     }
 
     @Test("a static now reads the host clock")

@@ -5,7 +5,7 @@ import SwiftSyntax
 /// The *classification* only. Whether a given source is a problem — and what to
 /// say about it — is the consumer's question: a lint rule exempts parameter
 /// defaults and test files, a purity oracle refutes outright, and a
-/// clock-determinism check cares about `.clock` and nothing else. This type
+/// clock-determinism check wants the time-related kinds and no others. This type
 /// answers "what is this, and where", and stops.
 public struct NondeterminismSource: Sendable, Equatable {
 
@@ -14,9 +14,32 @@ public struct NondeterminismSource: Sendable, Equatable {
     /// that wants them all can ignore it.
     public enum Kind: Sendable, Equatable {
 
-        /// Reads the host clock: `Date()`, `Date.now`, `ContinuousClock()`,
-        /// `Task.sleep(for:)`, `CFAbsoluteTimeGetCurrent()`.
-        case clock
+        /// Reads the current wall-clock instant outright: `Date()`, `Date.now`,
+        /// `CFAbsoluteTimeGetCurrent()`.
+        case wallClockNow
+
+        /// Derives a wall-clock instant *from* now, so it still reads the clock
+        /// but takes an argument doing it: `Date(timeIntervalSinceNow:)`.
+        ///
+        /// Separate from `wallClockNow` because the distinction is load-bearing
+        /// for a consumer that draws its line at arity — a rule reporting
+        /// "constructions that take no input can only come from ambient state"
+        /// includes the first and not the second, and the two cases let it say
+        /// so in the type system rather than by matching on spelling.
+        case wallClockOffset
+
+        /// Reads a monotonic clock, which does not track wall time but is still
+        /// not a function of the inputs: `DispatchTime.now()`,
+        /// `mach_absolute_time()`, `clock_gettime()`.
+        case monotonicClock
+
+        /// Obtains a host clock object rather than an instant from one:
+        /// `ContinuousClock()`, `SuspendingClock()`, and their static `now`.
+        case clockAcquisition
+
+        /// Suspends for a duration measured on a clock nobody supplied:
+        /// `Task.sleep(for:)`, `Task.sleep(nanoseconds:)`.
+        case timedSuspension
 
         /// Draws from the system RNG: `arc4random()`, `.random(in:)`,
         /// `.shuffled()`.
@@ -83,17 +106,23 @@ public enum NondeterminismSources {
         "ContinuousClock", "SuspendingClock"
     ]
 
-    /// Types carrying a static `now` that reads the host clock.
-    private static let ambientNowTypes: Set<String> = [
-        "Date", "ContinuousClock", "SuspendingClock", "DispatchTime", "DispatchWallTime"
+/// Monotonic clock functions with no injected form — no argument makes
+    /// `mach_absolute_time()` reproducible — so the bare call is the source.
+    private static let monotonicClockFunctions: Set<String> = [
+        "mach_absolute_time", "mach_continuous_time", "clock_gettime", "gettimeofday"
     ]
 
-    /// Clock functions with no injected form — no argument makes
-    /// `mach_absolute_time()` reproducible — so the bare call is the source.
-    private static let ambientTimeFunctions: Set<String> = [
-        "CFAbsoluteTimeGetCurrent", "mach_absolute_time", "mach_continuous_time",
-        "clock_gettime", "gettimeofday"
-    ]
+    /// The kind of clock a type's static `now` reads, or `nil` when the type is
+    /// not one this classifier knows. Keeping the mapping in one place is what
+    /// lets the call-position and member-position entry points agree.
+    private static func nowKind(ofType typeName: String) -> NondeterminismSource.Kind? {
+        switch typeName {
+        case "Date": return .wallClockNow
+        case "ContinuousClock", "SuspendingClock": return .clockAcquisition
+        case "DispatchTime", "DispatchWallTime": return .monotonicClock
+        default: return nil
+        }
+    }
 
     /// The legacy C RNG entry points.
     private static let randomFunctions: Set<String> = [
@@ -119,14 +148,40 @@ public enum NondeterminismSources {
         // or function name callee.
         if let reference = call.calledExpression.as(DeclReferenceExprSyntax.self) {
             let name = reference.baseName.text
-            if name == "Date", readsAmbientDate(call) {
-                return NondeterminismSource(kind: .clock, marker: "Date()", position: position)
+            if name == "Date" {
+                if call.arguments.isEmpty {
+                    return NondeterminismSource(kind: .wallClockNow, marker: "Date()", position: position)
+                }
+                if call.arguments.first?.label?.text == "timeIntervalSinceNow" {
+                    // Reported under its own spelling, not folded into `Date()`:
+                    // a diagnostic naming the initializer the author wrote is
+                    // the difference between "this reads the clock" and "which
+                    // of these reads the clock".
+                    return NondeterminismSource(
+                        kind: .wallClockOffset,
+                        marker: "Date(timeIntervalSinceNow:)",
+                        position: position
+                    )
+                }
+                return nil
             }
             if name == "UUID", call.arguments.isEmpty {
                 return NondeterminismSource(kind: .identity, marker: "UUID()", position: position)
             }
-            if ambientClockTypes.contains(name) || ambientTimeFunctions.contains(name) {
-                return NondeterminismSource(kind: .clock, marker: "\(name)()", position: position)
+            if ambientClockTypes.contains(name) {
+                return NondeterminismSource(
+                    kind: .clockAcquisition, marker: "\(name)()", position: position
+                )
+            }
+            if name == "CFAbsoluteTimeGetCurrent" {
+                return NondeterminismSource(
+                    kind: .wallClockNow, marker: "\(name)()", position: position
+                )
+            }
+            if monotonicClockFunctions.contains(name) {
+                return NondeterminismSource(
+                    kind: .monotonicClock, marker: "\(name)()", position: position
+                )
             }
             if randomFunctions.contains(name) {
                 return NondeterminismSource(kind: .randomness, marker: "\(name)()", position: position)
@@ -142,10 +197,12 @@ public enum NondeterminismSources {
         if let base = member.base?.as(DeclReferenceExprSyntax.self) {
             let typeName = base.baseName.text
             if typeName == "Task", memberName == "sleep", !sleepsOnSuppliedClock(call) {
-                return NondeterminismSource(kind: .clock, marker: "Task.sleep", position: position)
+                return NondeterminismSource(
+                    kind: .timedSuspension, marker: "Task.sleep", position: position
+                )
             }
-            if ambientNowTypes.contains(typeName), memberName == "now" {
-                return NondeterminismSource(kind: .clock, marker: "\(typeName).now", position: position)
+            if memberName == "now", let kind = nowKind(ofType: typeName) {
+                return NondeterminismSource(kind: kind, marker: "\(typeName).now", position: position)
             }
         }
 
@@ -171,8 +228,8 @@ public enum NondeterminismSources {
         let memberName = member.declName.baseName.text
         let position = member.positionAfterSkippingLeadingTrivia
 
-        if memberName == "now", ambientNowTypes.contains(typeName) {
-            return NondeterminismSource(kind: .clock, marker: "\(typeName).now", position: position)
+        if memberName == "now", let kind = nowKind(ofType: typeName) {
+            return NondeterminismSource(kind: kind, marker: "\(typeName).now", position: position)
         }
         if memberName == "current", ambientEnvironmentTypes.contains(typeName) {
             return NondeterminismSource(
@@ -182,16 +239,6 @@ public enum NondeterminismSources {
             )
         }
         return nil
-    }
-
-    /// `Date()` reads the host clock; so does `Date(timeIntervalSinceNow:)`,
-    /// whose argument is an *offset from* now rather than an absolute instant.
-    /// Every other initializer names a fixed reference point
-    /// (`timeIntervalSince1970:`, `timeIntervalSinceReferenceDate:`,
-    /// `timeInterval:since:`) and is deterministic.
-    private static func readsAmbientDate(_ call: FunctionCallExprSyntax) -> Bool {
-        guard let first = call.arguments.first else { return true }
-        return first.label?.text == "timeIntervalSinceNow"
     }
 
     /// `Task.sleep(for:tolerance:clock:)` sleeps on the clock it was handed.
