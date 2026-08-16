@@ -64,6 +64,15 @@ public struct AmbientTimeWitness: Sendable, Equatable {
 /// `let clock = ContinuousClock()` is still caught, because the acquisition is
 /// right there in the body.
 ///
+/// ## Where the markers live
+///
+/// Not here. `NondeterminismSources` owns the sets and the argument-aware
+/// shape-matching, and this type is the `.clock`-shaped question asked of it —
+/// one scan, one set of markers, filtered to the kind this question is about.
+/// The same classifier answers SwiftProjectLint's `nonInjectedNondeterminism`
+/// rule, which is what keeps a clock-reading expression from meaning one thing
+/// to the linter and another to the oracle.
+///
 /// ## Precision, and why it does not contradict `PurityInferrer`'s crudeness
 ///
 /// `PurityInferrer` matches nondeterminism markers by bare identifier token and
@@ -84,27 +93,6 @@ public struct AmbientTimeWitness: Sendable, Equatable {
 public struct ClockDeterminismRefuter: Sendable {
 
     public init() {}
-
-    /// Clock types whose no-argument construction *is* the acquisition.
-    /// `ContinuousClock()` and `SuspendingClock()` read the host's clock; a
-    /// clock that arrives as a parameter is constructed in the caller, where
-    /// this refuter is not looking and the claim does not apply.
-    private static let ambientClockTypes: Set<String> = [
-        "ContinuousClock", "SuspendingClock"
-    ]
-
-    /// Types carrying a static `now` that reads the host clock.
-    private static let ambientNowTypes: Set<String> = [
-        "Date", "ContinuousClock", "SuspendingClock", "DispatchTime", "DispatchWallTime"
-    ]
-
-    /// Free functions that read the host clock. These have no injected form —
-    /// there is no argument that makes `mach_absolute_time()` deterministic —
-    /// so the bare call is the acquisition.
-    private static let ambientTimeFunctions: Set<String> = [
-        "CFAbsoluteTimeGetCurrent", "mach_absolute_time", "mach_continuous_time",
-        "clock_gettime", "gettimeofday"
-    ]
 
     /// The witness that `function`'s body reaches for ambient time, or `nil` for
     /// **no opinion** — which is not the same as "clock-deterministic". A
@@ -157,72 +145,6 @@ public struct ClockDeterminismRefuter: Sendable {
         return collector.witness
     }
 
-    // MARK: - Shape predicates
-    //
-    // Static and internal so the collector can consult them without holding the
-    // refuter, and so the tests can pin the argument-aware cases directly.
-
-    /// Whether a call expression acquires ambient time.
-    static func acquiresAmbientTime(_ call: FunctionCallExprSyntax) -> String? {
-        // `ContinuousClock()`, `Date()`, `Date(timeIntervalSinceNow:)`,
-        // `CFAbsoluteTimeGetCurrent()` — a bare type or function name callee.
-        if let reference = call.calledExpression.as(DeclReferenceExprSyntax.self) {
-            let name = reference.baseName.text
-            if ambientClockTypes.contains(name) || ambientTimeFunctions.contains(name) {
-                return "\(name)()"
-            }
-            if name == "Date", acquiresAmbientDate(call) {
-                return "Date()"
-            }
-            return nil
-        }
-
-        // `Task.sleep(…)`, `DispatchTime.now()` — a `Type.member(…)` callee.
-        if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
-           let base = member.base?.as(DeclReferenceExprSyntax.self) {
-            let typeName = base.baseName.text
-            let memberName = member.declName.baseName.text
-            if typeName == "Task", memberName == "sleep", !sleepsOnSuppliedClock(call) {
-                return "Task.sleep"
-            }
-            if ambientNowTypes.contains(typeName), memberName == "now" {
-                return "\(typeName).now"
-            }
-        }
-
-        return nil
-    }
-
-    /// `Date()` reads the host clock; so does `Date(timeIntervalSinceNow:)`,
-    /// whose argument is an *offset from* now rather than an absolute instant.
-    /// Every other initializer names a fixed reference point
-    /// (`timeIntervalSince1970:`, `timeIntervalSinceReferenceDate:`,
-    /// `timeInterval:since:`) and is deterministic, so it is not an acquisition.
-    private static func acquiresAmbientDate(_ call: FunctionCallExprSyntax) -> Bool {
-        guard let first = call.arguments.first else { return true }
-        return first.label?.text == "timeIntervalSinceNow"
-    }
-
-    /// `Task.sleep(for:tolerance:clock:)` takes the clock it sleeps on, so the
-    /// injected form is not an acquisition. `Task.sleep(for:)` and
-    /// `Task.sleep(nanoseconds:)` fall back to the host clock and are.
-    private static func sleepsOnSuppliedClock(_ call: FunctionCallExprSyntax) -> Bool {
-        call.arguments.contains { $0.label?.text == "clock" }
-    }
-
-    /// Whether a member access *not* in call position reads ambient time —
-    /// `Date.now`, `ContinuousClock.now`. The base must be a bare type name:
-    /// `clock.now` on an injected parameter is the correct use of the marker and
-    /// must survive, and it is distinguishable here precisely because `clock` is
-    /// not a type this set knows.
-    static func readsAmbientNow(_ member: MemberAccessExprSyntax) -> String? {
-        guard member.declName.baseName.text == "now",
-              let base = member.base?.as(DeclReferenceExprSyntax.self),
-              ambientNowTypes.contains(base.baseName.text) else {
-            return nil
-        }
-        return "\(base.baseName.text).now"
-    }
 }
 
 /// Finds the first ambient-time acquisition anywhere under a body, closures
@@ -237,19 +159,21 @@ private final class AmbientTimeCollector: SourceAccurateSyntaxVisitor {
 
     override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
         guard witness == nil else { return .skipChildren }
-        if let marker = ClockDeterminismRefuter.acquiresAmbientTime(node) {
-            witness = AmbientTimeWitness(marker: marker, position: node.positionAfterSkippingLeadingTrivia)
-            return .skipChildren
-        }
-        return .visitChildren
+        return record(NondeterminismSources.source(of: node))
     }
 
     override func visit(_ node: MemberAccessExprSyntax) -> SyntaxVisitorContinueKind {
         guard witness == nil else { return .skipChildren }
-        if let marker = ClockDeterminismRefuter.readsAmbientNow(node) {
-            witness = AmbientTimeWitness(marker: marker, position: node.positionAfterSkippingLeadingTrivia)
-            return .skipChildren
-        }
-        return .visitChildren
+        return record(NondeterminismSources.source(of: node))
+    }
+
+    /// Keeps `.clock` and discards the rest. A `UUID()` or a `.shuffled()` in the
+    /// body says nothing about whether the function varies with wall-clock time,
+    /// which is the whole of what the claim asserts — refuting on them would
+    /// contradict annotations that are perfectly honest about time.
+    private func record(_ source: NondeterminismSource?) -> SyntaxVisitorContinueKind {
+        guard let source, source.kind == .clock else { return .visitChildren }
+        witness = AmbientTimeWitness(marker: source.marker, position: source.position)
+        return .skipChildren
     }
 }
