@@ -30,21 +30,37 @@ struct NondeterminismSourcesTests {
         return collector.found
     }
 
-    @Test("clock sources are classified as clock", arguments: [
-        ("let stamp = Date()", "Date()"),
-        ("let stamp = Date.now", "Date.now"),
-        ("let stamp = Date(timeIntervalSinceNow: 60)", "Date()"),
-        ("let clock = ContinuousClock()", "ContinuousClock()"),
-        ("let clock = SuspendingClock()", "SuspendingClock()"),
-        ("let elapsed = CFAbsoluteTimeGetCurrent()", "CFAbsoluteTimeGetCurrent()"),
-        ("let ticks = mach_absolute_time()", "mach_absolute_time()"),
-        ("try await Task.sleep(for: .seconds(1))", "Task.sleep"),
-        ("let stamp = DispatchTime.now()", "DispatchTime.now")
+    /// The clock kinds are split rather than lumped, because two consumers draw
+    /// their lines in different places: the clock-determinism refuter wants all
+    /// of them, and SwiftProjectLint's nondeterminism rule reports only
+    /// `wallClockNow`. A single `.clock` case would force one of them to filter
+    /// on spelling.
+    @Test("time sources carry the kind their consumer filters on", arguments: [
+        ("let stamp = Date()", NondeterminismSource.Kind.wallClockNow, "Date()"),
+        ("let stamp = Date.now", .wallClockNow, "Date.now"),
+        ("let elapsed = CFAbsoluteTimeGetCurrent()", .wallClockNow, "CFAbsoluteTimeGetCurrent()"),
+        ("let stamp = Date(timeIntervalSinceNow: 60)", .wallClockOffset, "Date(timeIntervalSinceNow:)"),
+        ("let clock = ContinuousClock()", .clockAcquisition, "ContinuousClock()"),
+        ("let clock = SuspendingClock()", .clockAcquisition, "SuspendingClock()"),
+        ("let instant = ContinuousClock.now", .clockAcquisition, "ContinuousClock.now"),
+        ("let ticks = mach_absolute_time()", .monotonicClock, "mach_absolute_time()"),
+        ("let stamp = DispatchTime.now()", .monotonicClock, "DispatchTime.now"),
+        ("try await Task.sleep(for: .seconds(1))", .timedSuspension, "Task.sleep")
     ])
-    func clockSources(source: String, marker: String) {
+    func timeSources(source: String, kind: NondeterminismSource.Kind, marker: String) {
         let found = firstSource(in: source)
-        #expect(found?.kind == .clock)
+        #expect(found?.kind == kind)
         #expect(found?.marker == marker)
+    }
+
+    /// `Date(timeIntervalSinceNow:)` reports under its own spelling rather than
+    /// folded into `Date()`. A diagnostic naming the initializer the author
+    /// actually wrote is the difference between "this reads the clock" and
+    /// "which of these reads the clock".
+    @Test("the offset initializer is named faithfully, not normalised")
+    func offsetInitializerKeepsItsSpelling() {
+        #expect(firstSource(in: "let soon = Date(timeIntervalSinceNow: 60)")?.marker
+            == "Date(timeIntervalSinceNow:)")
     }
 
     @Test("randomness sources are classified as randomness", arguments: [
