@@ -77,9 +77,34 @@ public struct PurityInferrer: Sendable {
 
     /// Side-effect markers — I/O, logging, persistence. Any reference in the
     /// body refutes the "no side effects" clause of purity.
+    ///
+    /// **`FileHandle` / `Process` / `Pipe` are here because `throws` was never
+    /// the whole gate.** `throwsOnlyItsOwnErrors` (below) exists because gating
+    /// on `throws` had been masking *"`Process`, `Pipe`, `FileHandle`,
+    /// `String(contentsOf:)`, `Data(contentsOf:)`, the SQLite surface"* — and
+    /// that gate re-closed the hole for **throwing** functions only. The
+    /// non-throwing half stayed open, and it is not a corner:
+    /// `FileHandle.standardError.write(_:)` does not throw and is the commonest
+    /// I/O call in a Swift CLI.
+    ///
+    /// Measured before the fix, on SwiftInferProperties' `Sources/`: **7
+    /// non-refuted functions wrote to standard error and were judged `.pure`**,
+    /// including both of that package's own `writeDiagnostic(_:)`. A tool
+    /// vouching for the purity of its own diagnostic writer.
+    ///
+    /// **`String` and `Data` are deliberately NOT here**, and the reason is the
+    /// shape of this scan rather than the shape of the risk. This set is matched
+    /// by bare identifier, and those two are among the most common pure types in
+    /// Swift — admitting them would refute nearly everything. They also need no
+    /// entry: `String(contentsOf:)` and `Data(contentsOf:)` throw, so `try`
+    /// reaches them and `throwsOnlyItsOwnErrors` already refutes. **The list in
+    /// that doc is therefore fully covered between the two mechanisms**, which is
+    /// worth stating because "add the rest of the list" is the obvious next
+    /// thought and it is wrong.
     private static let sideEffectMarkers: Set<String> = [
         "print", "NSLog", "FileManager", "URLSession", "UserDefaults",
-        "NotificationCenter", "DispatchQueue"
+        "NotificationCenter", "DispatchQueue",
+        "FileHandle", "Process", "Pipe"
     ]
 
     /// Nondeterminism markers — sources whose result is not a function of the
@@ -93,9 +118,28 @@ public struct PurityInferrer: Sendable {
     /// the sound direction on the effect lattice — better to withhold `.pure`
     /// than to claim it for a clock-reading function — and both consumers (the
     /// linter's candidate nudge, the inferrer's `pure`-suggestion gate) prefer
-    /// to refute when unsure. The AST-precise forms live in SwiftProjectLint's
-    /// `NonInjectedNondeterminismVisitor`; this token set is the leaf-level
-    /// over-approximation of that rule.
+    /// to refute when unsure.
+    ///
+    /// **This set is no longer the whole nondeterminism answer, and its old doc
+    /// pointed at the wrong repository.** It used to say the AST-precise forms
+    /// lived in SwiftProjectLint's `NonInjectedNondeterminismVisitor`. They live
+    /// in `NondeterminismSources`, **one file away in this module** — that type
+    /// exists precisely to end *"two implementations of 'does this reach for
+    /// ambient time' in two repositories"*, and this oracle was still carrying a
+    /// third. `hasRefutingMarker` now consults it as well.
+    ///
+    /// **Union, not replacement, and the distinction is load-bearing.** The
+    /// classifier is AST-precise, which makes it *narrower* here: it reads
+    /// `Date(timeIntervalSince1970:)` as deterministic and would not refute it.
+    /// Swapping this set out for the classifier would therefore be a *relaxation*
+    /// of a gate whose over-refutation is deliberate and documented above. Both
+    /// run; either one refutes.
+    ///
+    /// Measured before the union, on synthetic witnesses: `DispatchTime.now()`,
+    /// `ContinuousClock()`, `SuspendingClock.now`, `mach_absolute_time()`,
+    /// `gettimeofday()`, `Locale.current` and `TimeZone.current` all reached
+    /// **`.pure`** — seven sources this module's own classifier already knew
+    /// about, waved through by this module's own purity oracle.
     private static let nondeterministicMarkers: Set<String> = [
         "arc4random", "arc4random_uniform", "drand48", "CFAbsoluteTimeGetCurrent",
         "random", "randomElement", "shuffled",
@@ -337,12 +381,26 @@ public struct PurityInferrer: Sendable {
         }
     }
 
-    /// Any I/O, logging, persistence, clock or randomness marker anywhere in `syntax`.
+    /// Any I/O, logging, persistence, clock or randomness marker anywhere in
+    /// `syntax` — by bare token, **or** by the module's own AST-precise
+    /// nondeterminism classifier.
+    ///
+    /// Two passes because they catch different things and neither subsumes the
+    /// other. The token scan is broad and shape-blind; `NondeterminismSources`
+    /// is narrow and shape-aware, and knows about the monotonic clocks, the
+    /// clock-acquisition types, `Task.sleep` and the ambient-environment types
+    /// that no token in the set names. Running both keeps every deliberate
+    /// over-refutation the token set was written for while closing what it never
+    /// covered.
     private func hasRefutingMarker(in syntax: Syntax) -> Bool {
-        syntax.tokens(viewMode: .sourceAccurate).contains {
+        let tokenHit = syntax.tokens(viewMode: .sourceAccurate).contains {
             Self.sideEffectMarkers.contains($0.text)
                 || Self.nondeterministicMarkers.contains($0.text)
         }
+        if tokenHit { return true }
+        let checker = NondeterminismChecker()
+        checker.walk(syntax)
+        return checker.sawSource
     }
 
     /// Whether nothing in `syntax` can trap at runtime.
@@ -393,6 +451,33 @@ public struct PurityInferrer: Sendable {
         let checker = TryExpressionChecker()
         checker.walk(body)
         return !checker.sawTry
+    }
+}
+
+/// Finds any nondeterminism source this module's shared classifier recognises.
+///
+/// The classifier is consulted rather than re-derived: `NondeterminismSources`
+/// is the type this package extracted so that "does this reach for ambient
+/// time" has one implementation, and a purity oracle carrying a fourth copy of
+/// the answer would be the drift that extraction exists to prevent.
+///
+/// Both overloads are needed. `source(of: FunctionCallExprSyntax)` catches
+/// `ContinuousClock()`, `mach_absolute_time()`, `DispatchTime.now()`;
+/// `source(of: MemberAccessExprSyntax)` catches the property forms —
+/// `SuspendingClock.now`, `Locale.current`, `TimeZone.current` — which are not
+/// calls at all and which a call-only walk misses entirely.
+private final class NondeterminismChecker: SourceAccurateSyntaxVisitor {
+
+    private(set) var sawSource = false
+
+    override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
+        if NondeterminismSources.source(of: node) != nil { sawSource = true }
+        return .visitChildren
+    }
+
+    override func visit(_ node: MemberAccessExprSyntax) -> SyntaxVisitorContinueKind {
+        if NondeterminismSources.source(of: node) != nil { sawSource = true }
+        return .visitChildren
     }
 }
 
