@@ -103,9 +103,14 @@ public struct PurityInferrer: Sendable {
     ]
 
     /// Returns `.pure` when `function` is referentially transparent — its
-    /// signature is synchronous and non-throwing, its body references no
-    /// side-effect or nondeterminism marker, and nothing in it can trap — and
-    /// `nil` (purity refuted) otherwise.
+    /// signature is synchronous and non-throwing, neither its body nor any
+    /// **default argument** references a side-effect or nondeterminism marker,
+    /// and nothing in either can trap — and `nil` (purity refuted) otherwise.
+    ///
+    /// The default arguments are part of the answer because they are part of the
+    /// function: they run on exactly the calls that omit them. See
+    /// `hasRefutingDefaultArgument`, which also says why the *whole* signature is
+    /// deliberately not scanned.
     ///
     /// `async` and `throws` both refute purity: an `async` body awaits some
     /// effect, and a `throws` function has no return value for the inputs that
@@ -143,7 +148,8 @@ public struct PurityInferrer: Sendable {
               function.signature.effectSpecifiers?.throwsClause == nil else {
             return nil
         }
-        guard !bodyHasRefutingMarker(body), bodyIsTotal(body) else { return nil }
+        guard !bodyHasRefutingMarker(body), bodyIsTotal(body),
+              !hasRefutingDefaultArgument(function.signature) else { return nil }
         return .pure
     }
 
@@ -169,7 +175,8 @@ public struct PurityInferrer: Sendable {
     public func verdict(for function: FunctionDeclSyntax) -> PurityVerdict {
         guard let body = function.body else { return .refuted }
         guard function.signature.effectSpecifiers?.asyncSpecifier == nil else { return .refuted }
-        guard !bodyHasRefutingMarker(body), bodyIsTotal(body) else { return .refuted }
+        guard !bodyHasRefutingMarker(body), bodyIsTotal(body),
+              !hasRefutingDefaultArgument(function.signature) else { return .refuted }
         guard function.signature.effectSpecifiers?.throwsClause != nil else { return .pure }
         return throwsOnlyItsOwnErrors(body) ? .pureButPartial : .refuted
     }
@@ -279,6 +286,55 @@ public struct PurityInferrer: Sendable {
 
     private func bodyHasRefutingMarker(_ body: CodeBlockSyntax) -> Bool {
         hasRefutingMarker(in: Syntax(body))
+    }
+
+    /// Whether any parameter's **default value** refutes purity.
+    ///
+    /// A default argument is code the function runs, and it runs on exactly the
+    /// calls that omit it. `func bridges(_ s: [S], now: Date = Date())` reads the
+    /// system clock every time a caller writes `bridges(suggestions)` — the
+    /// function is not a function of its inputs, because one of its inputs is the
+    /// clock. The body says so nowhere, which is why the body scan cannot see it:
+    /// `bodyHasRefutingMarker` is handed `function.body`, and a default value
+    /// lives in the signature.
+    ///
+    /// **Measured before it was fixed**, over SwiftInferProperties' `Sources/`
+    /// (2,456 non-refuted functions, tree `abbc0edb`): **15 subjects defaulted a
+    /// parameter to a marker and were judged `.pure`** — fourteen `Date()`, one
+    /// pair reading `FileManager.default.currentDirectoryPath`, every one of them
+    /// hand-checked. Small, and unambiguous: none is a borderline call.
+    ///
+    /// ## Default *values*, never the whole signature
+    ///
+    /// The scope is the entire fix and the entire trap. `func f(_ d: Date) -> Int`
+    /// mentions the `Date` marker in a parameter **type** and is perfectly pure —
+    /// taking a value is not reading a clock, and a function that accepts the
+    /// clock's reading as an argument is the *fixed* shape, the one every
+    /// dependency-injection guide recommends. A whole-signature token scan would
+    /// refute exactly the code this inferrer should be rewarding. So the walk
+    /// starts at `parameter.defaultValue?.value` and nowhere else.
+    ///
+    /// ## Totality travels with the markers
+    ///
+    /// `!isTotal` is checked here for the same reason it is checked on the body: a
+    /// default of `xs.first!` traps at the call sites that omit it, and a property
+    /// test over generated inputs would crash rather than falsify. Whether the
+    /// trap is written inside the braces or in the parameter list is not a
+    /// distinction the caller can observe.
+    ///
+    /// ## What this does not reach
+    ///
+    /// Only `FunctionDeclSyntax` — the type this inferrer takes. Initialisers and
+    /// subscripts have parameter lists and defaults too, and no entry point here
+    /// accepts them. Accessors have no parameters, and a closure signature cannot
+    /// carry a default value, so both other entry points are unaffected by
+    /// construction rather than by omission.
+    private func hasRefutingDefaultArgument(_ signature: FunctionSignatureSyntax) -> Bool {
+        signature.parameterClause.parameters.contains { parameter in
+            guard let defaultValue = parameter.defaultValue?.value else { return false }
+            let syntax = Syntax(defaultValue)
+            return hasRefutingMarker(in: syntax) || !isTotal(syntax)
+        }
     }
 
     /// Any I/O, logging, persistence, clock or randomness marker anywhere in `syntax`.
