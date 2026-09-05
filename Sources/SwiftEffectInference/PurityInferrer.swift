@@ -95,16 +95,41 @@ public struct PurityInferrer: Sendable {
     /// **`String` and `Data` are deliberately NOT here**, and the reason is the
     /// shape of this scan rather than the shape of the risk. This set is matched
     /// by bare identifier, and those two are among the most common pure types in
-    /// Swift — admitting them would refute nearly everything. They also need no
-    /// entry: `String(contentsOf:)` and `Data(contentsOf:)` throw, so `try`
-    /// reaches them and `throwsOnlyItsOwnErrors` already refutes. **The list in
-    /// that doc is therefore fully covered between the two mechanisms**, which is
-    /// worth stating because "add the rest of the list" is the obvious next
-    /// thought and it is wrong.
+    /// Swift — admitting them would refute nearly everything.
+    ///
+    /// **What this doc used to claim, and why it was wrong.** It said
+    /// `String(contentsOf:)` and `Data(contentsOf:)` need no entry because they
+    /// throw, so `throwsOnlyItsOwnErrors` reaches them, and that the list was
+    /// therefore "fully covered between the two mechanisms". That holds only
+    /// while the throw propagates. `try?` swallows it, and a non-throwing
+    /// convenience wrapper around a file read is exactly the shape that then
+    /// looks like a candidate:
+    ///
+    ///     static func textSwallowed(of url: URL) -> String {
+    ///         (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+    ///     }
+    ///
+    /// Measured against SwiftProjectLint's own rule set before this fix, that
+    /// function and two like it were reported as pure property-test candidates.
+    /// The file-reading *members* below close it without admitting the types:
+    /// they are distinctive names that no pure function has a reason to mention,
+    /// so the over-refutation risk the paragraph above is guarding is not
+    /// reintroduced. `contentsOf` is the argument label shared by the whole
+    /// family — `Data`, `String`, `NSDictionary`, `NSArray` — and catches them
+    /// all at once.
     private static let sideEffectMarkers: Set<String> = [
         "print", "NSLog", "FileManager", "URLSession", "UserDefaults",
         "NotificationCenter", "DispatchQueue",
-        "FileHandle", "Process", "Pipe"
+        "FileHandle", "Process", "Pipe",
+        // File-system reads that never name a type in this list. Each is a
+        // distinctive member or label rather than a type, which is what lets them
+        // sit here without the over-refutation the `String`/`Data` note forbids.
+        "resourceValues", "checkResourceIsReachable", "checkPromisedItemIsReachable",
+        "startAccessingSecurityScopedResource", "stopAccessingSecurityScopedResource",
+        "contentsOf", "contentsOfFile", "contentsOfDirectory"
+        // File-system reads that never name a type in this list. Each is a
+        // distinctive member or label rather than a type, which is what lets them
+        // sit here without the over-refutation the `String`/`Data` note forbids.
     ]
 
     /// Nondeterminism markers — sources whose result is not a function of the
