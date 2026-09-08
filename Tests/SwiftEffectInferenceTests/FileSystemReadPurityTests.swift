@@ -137,4 +137,74 @@ struct FileSystemReadPurityTests {
         """)
         #expect(inferrer.verdict(for: function) != .refuted)
     }
+
+    // MARK: - The control the original set was missing
+
+    /// `contentsOf` was matched as a bare token, which refuted every function
+    /// that appends one collection to another. The suite's controls checked
+    /// functions *taking* and *returning* `String` and `Data`; none of them
+    /// mentioned the label, so nothing here failed.
+    ///
+    /// Measured on SwiftInferProperties at the time: 49 functions newly
+    /// refuted, 43 of them for a collection append and 5 for a real file read.
+    @Test("append(contentsOf:) is pure -- it shares only the label")
+    func collectionAppendStaysPure() throws {
+        let function = try firstFunction(in: """
+        func merge(_ first: [Int], _ second: [Int]) -> [Int] {
+            var result = first
+            result.append(contentsOf: second)
+            return result
+        }
+        """)
+        #expect(inferrer.verdict(for: function) == .pure)
+    }
+
+    @Test("insert(contentsOf:at:) is pure")
+    func collectionInsertStaysPure() throws {
+        let function = try firstFunction(in: """
+        func prefixed(_ head: [Int], _ tail: [Int]) -> [Int] {
+            var result = tail
+            result.insert(contentsOf: head, at: 0)
+            return result
+        }
+        """)
+        #expect(inferrer.verdict(for: function) == .pure)
+    }
+
+    /// The other half of the pairing: removing the bare token must not lose the
+    /// read it was added for. Without this, `collectionAppendStaysPure` could be
+    /// satisfied by deleting the marker and closing nothing.
+    @Test("a swallowed String(contentsOf:) read still refutes after the fix")
+    func swallowedStringReadStillRefuted() throws {
+        let function = try firstFunction(in: """
+        func text(of url: URL) -> String {
+            (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+        }
+        """)
+        #expect(inferrer.verdict(for: function) == .refuted)
+    }
+
+    @Test("a swallowed Data(contentsOf:) read still refutes after the fix")
+    func swallowedDataReadStillRefuted() throws {
+        let function = try firstFunction(in: """
+        func bytes(of url: URL) -> Data {
+            (try? Data(contentsOf: url)) ?? Data()
+        }
+        """)
+        #expect(inferrer.verdict(for: function) == .refuted)
+    }
+
+    /// A function doing both must refute: the append must not mask the read.
+    @Test("an append alongside a real read still refutes")
+    func appendDoesNotMaskARead() throws {
+        let function = try firstFunction(in: """
+        func lines(of url: URL, extra: [String]) -> [String] {
+            var result = ((try? String(contentsOf: url, encoding: .utf8)) ?? "")
+                .split(separator: "\n").map(String.init)
+            result.append(contentsOf: extra)
+            return result
+        }
+        """)
+        #expect(inferrer.verdict(for: function) == .refuted)
+    }
 }
