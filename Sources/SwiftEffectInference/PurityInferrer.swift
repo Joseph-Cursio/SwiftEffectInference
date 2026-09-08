@@ -114,9 +114,19 @@ public struct PurityInferrer: Sendable {
     /// The file-reading *members* below close it without admitting the types:
     /// they are distinctive names that no pure function has a reason to mention,
     /// so the over-refutation risk the paragraph above is guarding is not
-    /// reintroduced. `contentsOf` is the argument label shared by the whole
-    /// family — `Data`, `String`, `NSDictionary`, `NSArray` — and catches them
-    /// all at once.
+    /// reintroduced.
+    ///
+    /// **`contentsOf` is the exception, and it does not belong in this set.**
+    /// It was added here on the reasoning that it is "the argument label shared
+    /// by the whole family -- `Data`, `String`, `NSDictionary`, `NSArray` -- and
+    /// catches them all at once". It is also the label of
+    /// `append(contentsOf:)`, `insert(contentsOf:)` and
+    /// `replaceSubrange(_:with:)`'s family, so matching it by bare token
+    /// refuted every pure function that appends one collection to another --
+    /// exactly the over-refutation the paragraph above forbids, arriving
+    /// through the label rather than the type. Measured on SwiftInferProperties:
+    /// 49 functions newly refuted, 43 of them for a collection append.
+    /// `FileReadChecker` matches the same reads on the callee instead.
     private static let sideEffectMarkers: Set<String> = [
         "print", "NSLog", "FileManager", "URLSession", "UserDefaults",
         "NotificationCenter", "DispatchQueue",
@@ -126,7 +136,10 @@ public struct PurityInferrer: Sendable {
         // sit here without the over-refutation the `String`/`Data` note forbids.
         "resourceValues", "checkResourceIsReachable", "checkPromisedItemIsReachable",
         "startAccessingSecurityScopedResource", "stopAccessingSecurityScopedResource",
-        "contentsOf", "contentsOfFile", "contentsOfDirectory"
+        // `contentsOfFile` and `contentsOfDirectory` are distinctive: no pure API
+        // uses either label. Bare `contentsOf` is NOT, and must never be added
+        // here -- see `FileReadChecker`, which matches it on the callee instead.
+        "contentsOfFile", "contentsOfDirectory"
         // File-system reads that never name a type in this list. Each is a
         // distinctive member or label rather than a type, which is what lets them
         // sit here without the over-refutation the `String`/`Data` note forbids.
@@ -423,6 +436,9 @@ public struct PurityInferrer: Sendable {
                 || Self.nondeterministicMarkers.contains($0.text)
         }
         if tokenHit { return true }
+        let fileRead = FileReadChecker()
+        fileRead.walk(syntax)
+        if fileRead.sawFileRead { return true }
         let checker = NondeterminismChecker()
         checker.walk(syntax)
         return checker.sawSource
@@ -502,6 +518,35 @@ private final class NondeterminismChecker: SourceAccurateSyntaxVisitor {
 
     override func visit(_ node: MemberAccessExprSyntax) -> SyntaxVisitorContinueKind {
         if NondeterminismSources.source(of: node) != nil { sawSource = true }
+        return .visitChildren
+    }
+}
+
+/// Detects a file read spelled `SomeType(contentsOf:)`.
+///
+/// `contentsOf` cannot be matched as a bare token: it is the argument label of
+/// `append(contentsOf:)` and `insert(contentsOf:)`, so a token match refutes
+/// every pure function that appends one collection to another. Matching the
+/// *callee* separates them — `String(contentsOf: url)` names a file-reading
+/// type, `array.append(contentsOf: other)` does not.
+private final class FileReadChecker: SourceAccurateSyntaxVisitor {
+
+    /// Types whose `init(contentsOf:)` reads from a URL or path. `String` and
+    /// `Data` are deliberately absent from `sideEffectMarkers` because naming
+    /// them as bare tokens would refute nearly everything; naming them here is
+    /// safe, because the match also requires the `contentsOf` label.
+    private static let fileReadingTypes: Set<String> = [
+        "String", "Data", "NSString", "NSData", "NSDictionary", "NSArray"
+    ]
+
+    private(set) var sawFileRead = false
+
+    override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
+        guard let callee = node.calledExpression.as(DeclReferenceExprSyntax.self),
+              Self.fileReadingTypes.contains(callee.baseName.text),
+              node.arguments.contains(where: { $0.label?.text == "contentsOf" })
+        else { return .visitChildren }
+        sawFileRead = true
         return .visitChildren
     }
 }
