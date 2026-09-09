@@ -223,21 +223,35 @@ public struct PurityInferrer: Sendable {
     /// questions, which is the same argument `PurityVerdict`'s own doc makes for
     /// separating them at all.
     public func inferredEffect(for function: FunctionDeclSyntax) -> Effect? {
-        guard let body = function.body else { return nil }
-        // The cheap rejections first, and `throws` belongs among them HERE even
-        // though it cannot be there in `verdict`.
-        guard function.signature.effectSpecifiers?.asyncSpecifier == nil,
-              function.signature.effectSpecifiers?.throwsClause == nil else {
-            return nil
-        }
-        guard !bodyHasRefutingMarker(body), bodyIsTotal(body),
-              !hasRefutingDefaultArgument(function.signature) else { return nil }
-        return .pure
+        wholeDomainRefutation(for: function) == nil ? .pure : nil
     }
 
     /// Convenience boolean form of `inferredEffect(for:)`.
     public func isPure(_ function: FunctionDeclSyntax) -> Bool {
         inferredEffect(for: function) == .pure
+    }
+
+    /// **Why** the whole-domain question refused `function` — the witness behind
+    /// `inferredEffect(for:) == nil`, or `nil` when it returned `.pure`.
+    ///
+    /// This is `inferredEffect`'s own answer rather than a second opinion:
+    /// `inferredEffect` is now defined as *this returned nothing*, so the two
+    /// cannot drift. The signature short-circuit `inferredEffect` exists for is
+    /// preserved here — a `throws` function is `.declaredThrows` without a single
+    /// body walk, which is what
+    /// [#1](https://github.com/Joseph-Cursio/SwiftEffectInference/issues/1) is
+    /// about.
+    ///
+    /// **`.declaredThrows` is the only case `refutation(for:)` cannot produce**,
+    /// and it is the whole difference between the two questions. Everything else
+    /// is delegated, so the refuters are written once.
+    public func wholeDomainRefutation(for function: FunctionDeclSyntax) -> PurityRefutation? {
+        guard function.body != nil else { return .noBody }
+        // The cheap rejections first, and `throws` belongs among them HERE even
+        // though it cannot be there in `verdict`.
+        guard function.signature.effectSpecifiers?.asyncSpecifier == nil else { return .declaredAsync }
+        guard function.signature.effectSpecifiers?.throwsClause == nil else { return .declaredThrows }
+        return refutation(for: function)
     }
 
     /// The full verdict — which clause of purity `function` satisfies.
@@ -255,12 +269,40 @@ public struct PurityInferrer: Sendable {
     /// referentially transparent. (Clock-determinism is a separate, *declared*
     /// claim; see `EffectAnnotationParser`.)
     public func verdict(for function: FunctionDeclSyntax) -> PurityVerdict {
-        guard let body = function.body else { return .refuted }
-        guard function.signature.effectSpecifiers?.asyncSpecifier == nil else { return .refuted }
-        guard !bodyHasRefutingMarker(body), bodyIsTotal(body),
-              !hasRefutingDefaultArgument(function.signature) else { return .refuted }
-        guard function.signature.effectSpecifiers?.throwsClause != nil else { return .pure }
-        return throwsOnlyItsOwnErrors(body) ? .pureButPartial : .refuted
+        guard refutation(for: function) == nil else { return .refuted }
+        return function.signature.effectSpecifiers?.throwsClause == nil ? .pure : .pureButPartial
+    }
+
+    /// **Why** purity was refuted, or `nil` when it was not — the witness
+    /// `PurityVerdict` does not carry.
+    ///
+    /// `nil` here means `.pure` **or** `.pureButPartial`: a function that raises
+    /// only its own errors has not been refuted, it has been narrowed, and
+    /// `verdict(for:)` is the method that says which. That is why this returns an
+    /// optional rather than a `PurityRefutation` beside a verdict — there is no
+    /// witness for "it throws, and that is fine".
+    ///
+    /// `verdict(for:)` is defined as *this returned nothing*, so a refuter taught
+    /// to one is taught to both. The refuters run in a fixed order and the first
+    /// one to fire is the answer; see `PurityRefutation` on why one witness rather
+    /// than all of them.
+    ///
+    /// ## What this unblocks
+    ///
+    /// A consumer that wants to *report* an impurity rather than gate on one. The
+    /// census rules downstream drop an impure closure without a word, so they
+    /// publish an inventory of what is already testable and discard the
+    /// complement — which is the half a reader acts on. And a caller taking the
+    /// meet of its own analysis with this one no longer has to infer a witness
+    /// from the `throws` clause, which was the only refutation reason visible from
+    /// outside.
+    public func refutation(for function: FunctionDeclSyntax) -> PurityRefutation? {
+        guard let body = function.body else { return .noBody }
+        guard function.signature.effectSpecifiers?.asyncSpecifier == nil else { return .declaredAsync }
+        if let refutation = bodyRefutation(Syntax(body)) { return refutation }
+        if let refutation = refutingDefaultArgument(function.signature) { return refutation }
+        guard function.signature.effectSpecifiers?.throwsClause != nil else { return nil }
+        return throwsOnlyItsOwnErrors(body) ? nil : .propagatedTry
     }
 
     /// Whether a **closure literal** is referentially transparent — the same refuters as a
@@ -281,16 +323,31 @@ public struct PurityInferrer: Sendable {
     /// business. What refutes purity is the body **mutating** what it captured — then it is not a
     /// function of its inputs, and no extraction saves it.
     public func isPure(_ closure: ClosureExprSyntax) -> Bool {
+        refutation(for: closure) == nil
+    }
+
+    /// **Why** `closure` is not referentially transparent, or `nil` when it is.
+    ///
+    /// `isPure(_ closure:)` is defined as *this returned nothing*. The reason the
+    /// witness matters more here than anywhere else is that a closure has no name:
+    /// a report saying *this `filter` predicate is impure* and not what makes it
+    /// so leaves the reader to re-derive the analysis from the one line of source
+    /// the diagnostic points at.
+    ///
+    /// Unlike the function form, `throws` refutes outright — there is no
+    /// `.pureButPartial` for a closure, because nothing downstream narrows a law's
+    /// domain to an anonymous callee's success set.
+    public func refutation(for closure: ClosureExprSyntax) -> PurityRefutation? {
         // A closure declaring `async` or `throws` is out for the same reason a function is.
-        if let effects = closure.signature?.effectSpecifiers,
-           effects.asyncSpecifier != nil || effects.throwsClause != nil {
-            return false
+        if let effects = closure.signature?.effectSpecifiers {
+            if effects.asyncSpecifier != nil { return .declaredAsync }
+            if effects.throwsClause != nil { return .declaredThrows }
         }
 
         let statements = Syntax(closure.statements)
-        guard !hasRefutingMarker(in: statements), isTotal(statements) else { return false }
+        if let refutation = bodyRefutation(statements) { return refutation }
 
-        return !mutatesCapturedState(closure)
+        return mutatedCaptureName(closure).map { .mutatesCapturedState($0) }
     }
 
     /// Whether a **computed property's getter** is referentially transparent.
@@ -312,32 +369,46 @@ public struct PurityInferrer: Sendable {
     /// A setter, `willSet` or `didSet` refutes outright: a property with one is either observed
     /// stored state or a two-way channel, and neither is a value derived from `self`.
     public func isPure(_ accessor: AccessorBlockSyntax) -> Bool {
+        refutation(for: accessor) == nil
+    }
+
+    /// **Why** `accessor`'s getter is not a derived value, or `nil` when it is.
+    ///
+    /// `isPure(_ accessor:)` is defined as *this returned nothing*. `.notAGetter`
+    /// names the specifier that disqualified the property, which is a different
+    /// piece of advice from every other case here: a `didSet` is not a bug to fix,
+    /// it is a statement that the property is observed stored state.
+    public func refutation(for accessor: AccessorBlockSyntax) -> PurityRefutation? {
         switch accessor.accessors {
         case .getter(let statements):
             // The shorthand `var x: Int { … }` — the body IS the getter.
-            return isPureBody(Syntax(statements))
+            return bodyRefutation(Syntax(statements))
 
         case .accessors(let list):
             var getterBody: Syntax?
             for declaration in list {
                 switch declaration.accessorSpecifier.tokenKind {
                 case .keyword(.get):
-                    guard let body = declaration.body else { return false }
+                    guard let body = declaration.body else { return .noBody }
                     getterBody = Syntax(body.statements)
 
                 default:
                     // `set`, `willSet`, `didSet`, `_modify`, … — not a derived value.
-                    return false
+                    return .notAGetter(declaration.accessorSpecifier.text)
                 }
             }
-            guard let getterBody else { return false }
-            return isPureBody(getterBody)
+            guard let getterBody else { return .noBody }
+            return bodyRefutation(getterBody)
         }
     }
 
     /// The effect half of purity, over any body: no I/O, no nondeterminism, and nothing that traps.
-    private func isPureBody(_ syntax: Syntax) -> Bool {
-        !hasRefutingMarker(in: syntax) && isTotal(syntax)
+    ///
+    /// The order is the one every entry point relies on — markers, then totality —
+    /// so the witness a consumer sees does not depend on which door it came in by.
+    private func bodyRefutation(_ syntax: Syntax) -> PurityRefutation? {
+        if let marker = refutingMarker(in: syntax) { return marker }
+        return trap(in: syntax).map { .partiality($0) }
     }
 
     /// Whether the closure assigns to anything it did not itself declare — the one thing a capture
@@ -359,16 +430,23 @@ public struct PurityInferrer: Sendable {
     /// half of the definition and the reason this is not simply "does it touch a capture": a read
     /// capture becomes a parameter under extraction, and a written one does not.
     public func mutatesCapturedState(_ closure: ClosureExprSyntax) -> Bool {
+        mutatedCaptureName(closure) != nil
+    }
+
+    /// The name the closure writes through, or `nil` when it writes through none —
+    /// the witness form of `mutatesCapturedState(_:)`, which is defined as *this
+    /// returned something*.
+    ///
+    /// The root name, not the whole expression: `self.cache[key] = value` yields
+    /// `"self"`, because `self` is what the write escapes into and what no
+    /// extraction can turn into a parameter.
+    public func mutatedCaptureName(_ closure: ClosureExprSyntax) -> String? {
         let checker = CaptureMutationChecker(closure: closure, viewMode: .sourceAccurate)
         checker.walk(closure.statements)
-        return checker.mutatesCapture
+        return checker.mutatedName
     }
 
     // MARK: - Refutation predicates
-
-    private func bodyHasRefutingMarker(_ body: CodeBlockSyntax) -> Bool {
-        hasRefutingMarker(in: Syntax(body))
-    }
 
     /// Whether any parameter's **default value** refutes purity.
     ///
@@ -411,12 +489,14 @@ public struct PurityInferrer: Sendable {
     /// accepts them. Accessors have no parameters, and a closure signature cannot
     /// carry a default value, so both other entry points are unaffected by
     /// construction rather than by omission.
-    private func hasRefutingDefaultArgument(_ signature: FunctionSignatureSyntax) -> Bool {
-        signature.parameterClause.parameters.contains { parameter in
-            guard let defaultValue = parameter.defaultValue?.value else { return false }
-            let syntax = Syntax(defaultValue)
-            return hasRefutingMarker(in: syntax) || !isTotal(syntax)
+    private func refutingDefaultArgument(_ signature: FunctionSignatureSyntax) -> PurityRefutation? {
+        for parameter in signature.parameterClause.parameters {
+            guard let defaultValue = parameter.defaultValue?.value else { continue }
+            guard let cause = bodyRefutation(Syntax(defaultValue)) else { continue }
+            let name = parameter.secondName?.text ?? parameter.firstName.text
+            return .refutingDefaultArgument(parameter: name, cause: cause)
         }
+        return nil
     }
 
     /// Any I/O, logging, persistence, clock or randomness marker anywhere in
@@ -430,34 +510,35 @@ public struct PurityInferrer: Sendable {
     /// that no token in the set names. Running both keeps every deliberate
     /// over-refutation the token set was written for while closing what it never
     /// covered.
-    private func hasRefutingMarker(in syntax: Syntax) -> Bool {
-        let tokenHit = syntax.tokens(viewMode: .sourceAccurate).contains {
-            Self.sideEffectMarkers.contains($0.text)
-                || Self.nondeterministicMarkers.contains($0.text)
+    ///
+    /// The two token sets are reported as different cases even though they refute
+    /// alike, because they carry different confidence: the nondeterminism set is
+    /// deliberately shape-blind and refutes `Date(timeIntervalSince1970:)` along
+    /// with `Date()`, while a `.nondeterminismSource` came from the classifier and
+    /// read the argument labels. A consumer writing a diagnostic can say so; one
+    /// that only wants a Bool never has to look.
+    private func refutingMarker(in syntax: Syntax) -> PurityRefutation? {
+        for token in syntax.tokens(viewMode: .sourceAccurate) {
+            if Self.sideEffectMarkers.contains(token.text) {
+                return .sideEffectMarker(token.text)
+            }
+            if Self.nondeterministicMarkers.contains(token.text) {
+                return .nondeterministicMarker(token.text)
+            }
         }
-        if tokenHit { return true }
         let fileRead = FileReadChecker()
         fileRead.walk(syntax)
-        if fileRead.sawFileRead { return true }
+        if let read = fileRead.fileRead { return .fileRead(read) }
         let checker = NondeterminismChecker()
         checker.walk(syntax)
-        return checker.sawSource
+        return checker.source.map { .nondeterminismSource($0) }
     }
 
-    /// Whether nothing in `syntax` can trap at runtime.
-    private func isTotal(_ syntax: Syntax) -> Bool {
+    /// The first trap in `syntax`, or `nil` when nothing in it can trap at runtime.
+    private func trap(in syntax: Syntax) -> PurityRefutation.Partiality? {
         let checker = TotalityChecker()
         checker.walk(syntax)
-        return checker.isTotal
-    }
-
-    /// True when nothing in the body can trap (crash) at runtime — the property
-    /// that lets us treat the function as total. Force-unwrap (`!`), `try!`,
-    /// `as!`, and the `fatalError` / `precondition` / `assert` family all
-    /// introduce inputs for which there is no return value, so a property test
-    /// over generated inputs would hit a crash rather than a falsified law.
-    private func bodyIsTotal(_ body: CodeBlockSyntax) -> Bool {
-        isTotal(Syntax(body))
+        return checker.trap
     }
 
     /// Whether every way `body` can throw is one it raises *itself* — a `throw`
@@ -509,15 +590,19 @@ public struct PurityInferrer: Sendable {
 /// calls at all and which a call-only walk misses entirely.
 private final class NondeterminismChecker: SourceAccurateSyntaxVisitor {
 
-    private(set) var sawSource = false
+    /// The **first** source seen, which is the one a diagnostic names. The walk is
+    /// not short-circuited — it never was — so keeping the first rather than the
+    /// last costs nothing and makes the witness independent of tree order below
+    /// the first hit.
+    private(set) var source: NondeterminismSource?
 
     override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
-        if NondeterminismSources.source(of: node) != nil { sawSource = true }
+        if source == nil { source = NondeterminismSources.source(of: node) }
         return .visitChildren
     }
 
     override func visit(_ node: MemberAccessExprSyntax) -> SyntaxVisitorContinueKind {
-        if NondeterminismSources.source(of: node) != nil { sawSource = true }
+        if source == nil { source = NondeterminismSources.source(of: node) }
         return .visitChildren
     }
 }
@@ -539,14 +624,16 @@ private final class FileReadChecker: SourceAccurateSyntaxVisitor {
         "String", "Data", "NSString", "NSData", "NSDictionary", "NSArray"
     ]
 
-    private(set) var sawFileRead = false
+    /// The first read seen, spelled as the diagnostic wants it —
+    /// `"String(contentsOf:)"`.
+    private(set) var fileRead: String?
 
     override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
         guard let callee = node.calledExpression.as(DeclReferenceExprSyntax.self),
               Self.fileReadingTypes.contains(callee.baseName.text),
               node.arguments.contains(where: { $0.label?.text == "contentsOf" })
         else { return .visitChildren }
-        sawFileRead = true
+        if fileRead == nil { fileRead = "\(callee.baseName.text)(contentsOf:)" }
         return .visitChildren
     }
 }
@@ -566,7 +653,10 @@ private final class TryExpressionChecker: SourceAccurateSyntaxVisitor {
 /// Walks a function body looking for any runtime trap that breaks totality.
 private final class TotalityChecker: SourceAccurateSyntaxVisitor {
 
-    private(set) var isTotal = true
+    /// The first trap seen, or `nil` when the body is total. Which trap it is, not
+    /// merely that there is one: `x!` and `fatalError("unreachable")` call for
+    /// different advice, and the second names its own callee.
+    private(set) var trap: PurityRefutation.Partiality?
 
     /// Standard-library trap functions: reaching them means the function has no
     /// return value for some inputs.
@@ -575,19 +665,23 @@ private final class TotalityChecker: SourceAccurateSyntaxVisitor {
         "assert", "assertionFailure"
     ]
 
+    private func record(_ partiality: PurityRefutation.Partiality) {
+        if trap == nil { trap = partiality }
+    }
+
     override func visit(_ node: ForceUnwrapExprSyntax) -> SyntaxVisitorContinueKind {
         _ = node
-        isTotal = false
+        record(.forceUnwrap)
         return .skipChildren
     }
 
     override func visit(_ node: TryExprSyntax) -> SyntaxVisitorContinueKind {
-        if node.questionOrExclamationMark?.text == "!" { isTotal = false }
+        if node.questionOrExclamationMark?.text == "!" { record(.forcedTry) }
         return .visitChildren
     }
 
     override func visit(_ node: AsExprSyntax) -> SyntaxVisitorContinueKind {
-        if node.questionOrExclamationMark?.text == "!" { isTotal = false }
+        if node.questionOrExclamationMark?.text == "!" { record(.forcedCast) }
         return .visitChildren
     }
 
@@ -595,14 +689,14 @@ private final class TotalityChecker: SourceAccurateSyntaxVisitor {
     // inside a `SequenceExprSyntax`; the folded `AsExprSyntax` form only appears
     // after operator-precedence folding, which the linter doesn't run.
     override func visit(_ node: UnresolvedAsExprSyntax) -> SyntaxVisitorContinueKind {
-        if node.questionOrExclamationMark?.text == "!" { isTotal = false }
+        if node.questionOrExclamationMark?.text == "!" { record(.forcedCast) }
         return .visitChildren
     }
 
     override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
         if let callee = node.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
            Self.trapFunctions.contains(callee) {
-            isTotal = false
+            record(.trap(callee))
         }
         return .visitChildren
     }
@@ -620,7 +714,9 @@ private final class TotalityChecker: SourceAccurateSyntaxVisitor {
 private final class CaptureMutationChecker: SourceAccurateSyntaxVisitor {
 
     private let locallyBound: Set<String>
-    private(set) var mutatesCapture = false
+
+    /// The first captured name written to, or `nil` when none is.
+    private(set) var mutatedName: String?
 
     init(closure: ClosureExprSyntax, viewMode: SyntaxTreeViewMode) {
         self.locallyBound = Self.namesBound(by: closure)
@@ -651,7 +747,7 @@ private final class CaptureMutationChecker: SourceAccurateSyntaxVisitor {
     private func refuteIfCaptured(_ target: ExprSyntax) {
         guard let root = rootName(of: target) else { return }
         guard !locallyBound.contains(root), !Self.isShorthandParameter(root) else { return }
-        mutatesCapture = true
+        if mutatedName == nil { mutatedName = root }
     }
 
     /// `$0`, `$1`, … — a shorthand parameter is by construction bound by *some* enclosing closure and
