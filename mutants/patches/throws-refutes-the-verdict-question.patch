@@ -1,0 +1,12 @@
+diff --git a/Sources/SwiftEffectInference/PurityInferrer.swift b/Sources/SwiftEffectInference/PurityInferrer.swift
+index 9e21c10..ba4b323 100644
+--- a/Sources/SwiftEffectInference/PurityInferrer.swift
++++ b/Sources/SwiftEffectInference/PurityInferrer.swift
+@@ -299,6 +299,7 @@ public struct PurityInferrer: Sendable {
+     public func refutation(for function: FunctionDeclSyntax) -> PurityRefutation? {
+         guard let body = function.body else { return .noBody }
+         guard function.signature.effectSpecifiers?.asyncSpecifier == nil else { return .declaredAsync }
++        guard function.signature.effectSpecifiers?.throwsClause == nil else { return .declaredThrows }
+         if let refutation = bodyRefutation(Syntax(body)) { return refutation }
+         if let refutation = refutingDefaultArgument(function.signature) { return refutation }
+         guard function.signature.effectSpecifiers?.throwsClause != nil else { return nil }

@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/PurityInferrer.swift b/Sources/SwiftEffectInference/PurityInferrer.swift
+index 9e21c10..ac0eb6f 100644
+--- a/Sources/SwiftEffectInference/PurityInferrer.swift
++++ b/Sources/SwiftEffectInference/PurityInferrer.swift
+@@ -666,7 +666,7 @@ private final class TotalityChecker: SourceAccurateSyntaxVisitor {
+     ]
+ 
+     private func record(_ partiality: PurityRefutation.Partiality) {
+-        if trap == nil { trap = partiality }
++        trap = partiality
+     }
+ 
+     override func visit(_ node: ForceUnwrapExprSyntax) -> SyntaxVisitorContinueKind {
