@@ -85,4 +85,57 @@ struct PurityEntryPointEquivalenceTests {
         // the whole-domain answer cannot, and still walks the body to do so.
         #expect(inferrer.verdict(for: function) == .pureButPartial)
     }
+
+    /// Publishing the witness added a **third** and **fourth** copy of the same
+    /// answer, so the suite that exists to stop this drifting has to cover them.
+    ///
+    /// Both verdict-shaped methods are now *defined* as "the witness returned
+    /// nothing", which makes drift impossible by construction rather than by
+    /// discipline — and that is exactly the claim worth pinning, because the next
+    /// person to add a refuter can restore the duplication in one edit.
+    ///
+    /// **The two rows are deliberately different predicates.** A `.pureButPartial`
+    /// function is not refuted at all — it has been narrowed — so the verdict-shaped
+    /// witness returns `nil` for it, while the whole-domain one returns
+    /// `.declaredThrows`. Asserting the same equality for both would have failed,
+    /// which is how this test says the asymmetry is intended.
+    @Test("verdict and witness cannot disagree", arguments: subjects)
+    func witnessAgreesWithVerdict(label: String, source: String) throws {
+        let function = try #require(
+            Parser.parse(source: source)
+                .statements
+                .compactMap { $0.item.as(FunctionDeclSyntax.self) }
+                .first,
+            "could not parse a function from: \(label)"
+        )
+        let inferrer = PurityInferrer()
+        #expect(
+            (inferrer.refutation(for: function) == nil) == (inferrer.verdict(for: function) != .refuted),
+            "witness and verdict disagree on: \(label)"
+        )
+        #expect(
+            (inferrer.wholeDomainRefutation(for: function) == nil)
+                == (inferrer.inferredEffect(for: function) == .pure),
+            "whole-domain witness and inferredEffect disagree on: \(label)"
+        )
+    }
+
+    /// `.declaredThrows` is the one case the verdict-shaped question can never
+    /// produce, and it is the entire difference between the two questions. A
+    /// refuter accidentally taught to `refutation(for:)` instead of to
+    /// `wholeDomainRefutation(for:)` would collapse them, and nothing else here
+    /// would notice.
+    @Test("only the whole-domain question refutes on `throws`", arguments: subjects)
+    func onlyTheWholeDomainQuestionRefutesOnThrows(label: String, source: String) throws {
+        let function = try #require(
+            Parser.parse(source: source)
+                .statements
+                .compactMap { $0.item.as(FunctionDeclSyntax.self) }
+                .first
+        )
+        #expect(
+            PurityInferrer().refutation(for: function) != .declaredThrows,
+            "`throws` is a narrowing, not a refutation, on: \(label)"
+        )
+    }
 }
