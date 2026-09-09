@@ -1,0 +1,14 @@
+diff --git a/Sources/SwiftEffectInference/PurityInferrer.swift b/Sources/SwiftEffectInference/PurityInferrer.swift
+index 9e21c10..4cf52ac 100644
+--- a/Sources/SwiftEffectInference/PurityInferrer.swift
++++ b/Sources/SwiftEffectInference/PurityInferrer.swift
+@@ -493,8 +493,7 @@ public struct PurityInferrer: Sendable {
+         for parameter in signature.parameterClause.parameters {
+             guard let defaultValue = parameter.defaultValue?.value else { continue }
+             guard let cause = bodyRefutation(Syntax(defaultValue)) else { continue }
+-            let name = parameter.secondName?.text ?? parameter.firstName.text
+-            return .refutingDefaultArgument(parameter: name, cause: cause)
++            return cause
+         }
+         return nil
+     }

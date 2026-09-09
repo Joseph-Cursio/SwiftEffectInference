@@ -25,6 +25,46 @@
       "expected": "killed",
       "test": "nondeterminismIsImpure",
       "label": "drop Date from the nondeterminism markers — `Date()` is classified pure, the exact unearned-purity the inferrer exists to refute"
+    },
+    {
+      "id": "witness-order-trap-before-marker",
+      "patch": "patches/witness-order-trap-before-marker.patch",
+      "shape": "purity-witness",
+      "expected": "killed",
+      "test": "markersOutrankTraps",
+      "label": "report the trap before the marker in bodyRefutation -- every purity answer is unchanged and every entry point now names a different reason, so the witness a consumer prints depends on which door it came in by"
+    },
+    {
+      "id": "default-witness-loses-its-parameter",
+      "patch": "patches/default-witness-loses-its-parameter.patch",
+      "shape": "purity-witness",
+      "expected": "killed",
+      "test": "defaultArgumentCarriesBoth",
+      "label": "return a refuting default's cause unwrapped -- the diagnostic still names the clock read, and sends the reader to a body that does not mention it"
+    },
+    {
+      "id": "throws-refutes-the-verdict-question",
+      "patch": "patches/throws-refutes-the-verdict-question.patch",
+      "shape": "purity-witness",
+      "expected": "killed",
+      "test": "onlyTheWholeDomainQuestionRefutesOnThrows",
+      "label": "teach the verdict-shaped witness to refute on `throws` -- collapses the two questions, and with verdict now defined in terms of it, silently retires .pureButPartial"
+    },
+    {
+      "id": "capture-witness-names-the-target-not-the-root",
+      "patch": "patches/capture-witness-names-the-target-not-the-root.patch",
+      "shape": "purity-witness",
+      "expected": "killed",
+      "test": "capturedMemberWriteNamesTheBase",
+      "label": "record the whole assignment target rather than the root it escapes into -- `self.cache[k]` reads as the captured name, and the thing no extraction can rescue goes unnamed"
+    },
+    {
+      "id": "witness-keeps-the-last-trap",
+      "patch": "patches/witness-keeps-the-last-trap.patch",
+      "shape": "purity-witness",
+      "expected": "killed",
+      "test": "firstTrapWins",
+      "label": "keep the last trap the walker saw rather than the first -- no purity answer changes and no walker short-circuits, so the reported witness becomes a fact about tree order"
     }
   ]
 }

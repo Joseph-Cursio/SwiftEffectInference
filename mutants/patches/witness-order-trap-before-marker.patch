@@ -1,0 +1,15 @@
+diff --git a/Sources/SwiftEffectInference/PurityInferrer.swift b/Sources/SwiftEffectInference/PurityInferrer.swift
+index 9e21c10..3c3ba7d 100644
+--- a/Sources/SwiftEffectInference/PurityInferrer.swift
++++ b/Sources/SwiftEffectInference/PurityInferrer.swift
+@@ -407,8 +407,8 @@ public struct PurityInferrer: Sendable {
+     /// The order is the one every entry point relies on — markers, then totality —
+     /// so the witness a consumer sees does not depend on which door it came in by.
+     private func bodyRefutation(_ syntax: Syntax) -> PurityRefutation? {
+-        if let marker = refutingMarker(in: syntax) { return marker }
+-        return trap(in: syntax).map { .partiality($0) }
++        if let partiality = trap(in: syntax) { return .partiality(partiality) }
++        return refutingMarker(in: syntax)
+     }
+ 
+     /// Whether the closure assigns to anything it did not itself declare — the one thing a capture
