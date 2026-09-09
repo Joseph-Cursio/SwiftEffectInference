@@ -158,6 +158,19 @@ struct ClosurePurityTests {
     @Test("a closure reading the clock is not pure")
     func nondeterminismIsImpure() throws {
         #expect(try isPure("let stamped = items.map { item in Date() }") == false)
+
+        // The deliberate over-refutation, and the only assertion here that the
+        // token set alone can satisfy. `Date()` is reached by BOTH mechanisms —
+        // the bare-token scan and `NondeterminismSources` — so removing `Date`
+        // from the token set leaves the line above passing, and the corpus mutant
+        // that does exactly that survived silently from the day the classifier
+        // union landed. A deterministic `Date` initializer is the case the
+        // classifier reads as pure by design (it checks argument labels), so it
+        // is the one place the token entry is load-bearing rather than redundant.
+        #expect(
+            try isPure("let epochs = items.map { item in Date(timeIntervalSince1970: 0) }") == false,
+            "the token set's documented over-refutation is what makes it more than a duplicate"
+        )
     }
 
     @Test("a closure that can trap is not pure")
