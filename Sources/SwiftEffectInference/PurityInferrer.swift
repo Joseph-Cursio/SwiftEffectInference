@@ -757,7 +757,7 @@ private final class CaptureMutationChecker: SourceAccurateSyntaxVisitor {
     /// The digit check matters: `$` also prefixes a property wrapper's projected value, and
     /// `$isPresented.wrappedValue = true` writes through a genuine capture. Only `$` followed by
     /// digits is a closure parameter.
-    private static func isShorthandParameter(_ name: String) -> Bool {
+    static func isShorthandParameter(_ name: String) -> Bool {
         guard name.hasPrefix("$") else { return false }
         let digits = name.dropFirst()
         return !digits.isEmpty && digits.allSatisfy(\.isNumber)

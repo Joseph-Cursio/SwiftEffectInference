@@ -438,7 +438,7 @@ public enum CallSiteEffectInferrer {
     /// as a substring. The substring (not exact-match) policy is what lets
     /// suffixed variants — `requestLogger`, `activeRequestMeter` — qualify.
     /// `needles` must already be lowercased.
-    private static func isReceiver(_ name: String, matchingAnyOf needles: [String]) -> Bool {
+    static func isReceiver(_ name: String, matchingAnyOf needles: [String]) -> Bool {
         let lowered = name.lowercased()
         return needles.contains { lowered.contains($0) }
     }
@@ -447,7 +447,7 @@ public enum CallSiteEffectInferrer {
     /// variants like `requestLogger`, `rootLogger`, etc. Kept conservative —
     /// the receiver name must *literally* contain "log" (case-insensitive)
     /// as a substring. Intentionally loose on casing but tight on structure.
-    private static func isLoggerReceiver(_ name: String) -> Bool {
+    static func isLoggerReceiver(_ name: String) -> Bool {
         isReceiver(name, matchingAnyOf: ["log"])
     }
 
@@ -456,7 +456,7 @@ public enum CallSiteEffectInferrer {
     /// suffixed variants (`activeRequestMeter`, `requestCounter`, etc.).
     /// Round-12 follow-on — observationally absorbs metric mutations the
     /// same way the logger path absorbs log emissions.
-    private static func isMetricReceiver(_ name: String) -> Bool {
+    static func isMetricReceiver(_ name: String) -> Bool {
         isReceiver(name, matchingAnyOf: ["counter", "gauge", "meter", "timer", "recorder"])
     }
 
@@ -471,7 +471,7 @@ public enum CallSiteEffectInferrer {
     /// name must end with or contain `Decoder` / `Encoder` (case-insensitive
     /// via lowercasing the whole name). Silences codec instances like
     /// `decoder.decode(...)` without needing a full type resolver.
-    private static func isCodecReceiver(_ name: String) -> Bool {
+    static func isCodecReceiver(_ name: String) -> Bool {
         isReceiver(name, matchingAnyOf: ["decoder", "encoder"])
     }
 
