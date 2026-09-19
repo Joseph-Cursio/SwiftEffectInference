@@ -151,7 +151,7 @@ public struct DeclarationShape: Sendable, Hashable {
     }
 
     /// Whether the non-trailing-closure arguments could have filled `declared`.
-    private func acceptsOrdinaryArguments(
+    func acceptsOrdinaryArguments(
         _ callLabels: [String],
         against declared: [Parameter]
     ) -> Bool {

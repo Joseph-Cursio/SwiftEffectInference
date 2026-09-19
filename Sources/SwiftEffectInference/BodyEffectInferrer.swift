@@ -217,7 +217,7 @@ public enum BodyEffectInferrer {
         }
     }
 
-    private static func isEscapingClosure(_ closure: ClosureExprSyntax) -> Bool {
+    static func isEscapingClosure(_ closure: ClosureExprSyntax) -> Bool {
         var node = Syntax(closure).parent
         while let current = node {
             if let call = current.as(FunctionCallExprSyntax.self) {
