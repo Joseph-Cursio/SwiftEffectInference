@@ -493,7 +493,7 @@ extension EffectAnnotationParser {
     /// Names recognized as the unknown-effect marker attribute.
     static let effectUnknownAttributeNames: Set<String> = ["EffectUnknown"]
 
-    private func hasEffectUnknownAttribute(_ attributes: AttributeListSyntax) -> Bool {
+    func hasEffectUnknownAttribute(_ attributes: AttributeListSyntax) -> Bool {
         attributes.contains { element in
             guard let attr = element.as(AttributeSyntax.self),
                   let name = Self.attributeTypeName(attr.attributeName) else { return false }
@@ -511,7 +511,7 @@ extension EffectAnnotationParser {
     /// Names recognized as the clock-determinism marker attribute.
     static let clockDeterministicAttributeNames: Set<String> = ["ClockDeterministic"]
 
-    private func hasClockDeterministicAttribute(_ attributes: AttributeListSyntax) -> Bool {
+    func hasClockDeterministicAttribute(_ attributes: AttributeListSyntax) -> Bool {
         attributes.contains { element in
             guard let attr = element.as(AttributeSyntax.self),
                   let name = Self.attributeTypeName(attr.attributeName) else { return false }

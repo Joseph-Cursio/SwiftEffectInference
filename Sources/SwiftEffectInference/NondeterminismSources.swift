@@ -243,13 +243,13 @@ public enum NondeterminismSources {
 
     /// `Task.sleep(for:tolerance:clock:)` sleeps on the clock it was handed.
     /// `Task.sleep(for:)` and `Task.sleep(nanoseconds:)` fall back to the host's.
-    private static func sleepsOnSuppliedClock(_ call: FunctionCallExprSyntax) -> Bool {
+    static func sleepsOnSuppliedClock(_ call: FunctionCallExprSyntax) -> Bool {
         call.arguments.contains { $0.label?.text == "clock" }
     }
 
     /// `Int.random(in: r, using: &rng)` is reproducible from a seed — the
     /// testable form — so only the system-RNG spellings are sources.
-    private static func drawsFromSuppliedGenerator(_ call: FunctionCallExprSyntax) -> Bool {
+    static func drawsFromSuppliedGenerator(_ call: FunctionCallExprSyntax) -> Bool {
         call.arguments.contains { $0.label?.text == "using" }
     }
 }

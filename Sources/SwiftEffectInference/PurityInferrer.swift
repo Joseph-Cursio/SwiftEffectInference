@@ -569,7 +569,7 @@ public struct PurityInferrer: Sendable {
     /// function — refused for want of the cross-file view a leaf does not have.
     /// That is the sound direction, and `EffectSymbolTable` is where a caller with
     /// the whole program in hand can do better.
-    private func throwsOnlyItsOwnErrors(_ body: CodeBlockSyntax) -> Bool {
+    func throwsOnlyItsOwnErrors(_ body: CodeBlockSyntax) -> Bool {
         let checker = TryExpressionChecker()
         checker.walk(body)
         return !checker.sawTry
@@ -711,7 +711,7 @@ private final class TotalityChecker: SourceAccurateSyntaxVisitor {
 /// Names bound by the closure itself — its parameters, and any `let`/`var` in its body — are fair
 /// game to assign to: they are locals, not state. So are the parameters of any closure nested inside
 /// it, `$0` included; see `BoundNameCollector`.
-private final class CaptureMutationChecker: SourceAccurateSyntaxVisitor {
+final class CaptureMutationChecker: SourceAccurateSyntaxVisitor {
 
     private let locallyBound: Set<String>
 
