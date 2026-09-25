@@ -764,7 +764,7 @@ final class CaptureMutationChecker: SourceAccurateSyntaxVisitor {
     }
 
     /// `=`, and the compound forms (`+=`, `-=`, …) — all of which write to the left-hand side.
-    private func isAssignment(_ operatorExpr: ExprSyntax) -> Bool {
+    func isAssignment(_ operatorExpr: ExprSyntax) -> Bool {
         if operatorExpr.is(AssignmentExprSyntax.self) { return true }
         guard let binary = operatorExpr.as(BinaryOperatorExprSyntax.self) else { return false }
         return binary.operator.text.hasSuffix("=")
