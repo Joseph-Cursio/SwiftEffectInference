@@ -379,7 +379,7 @@ public struct EffectAnnotationParser: Sendable {
 
     /// Extracts a `(by: paramName)` qualifier if present. Tolerates whitespace
     /// variants. Returns `nil` when the qualifier is absent or malformed.
-    private static func extractByQualifier(from text: Substring) -> String? {
+    static func extractByQualifier(from text: Substring) -> String? {
         guard text.first == "(" else { return nil }
         let inside = text.dropFirst().trimmingLeadingWhitespace()
         guard inside.hasPrefix("by:") else { return nil }
@@ -501,7 +501,7 @@ extension EffectAnnotationParser {
         }
     }
 
-    private static func hasUnknownEffectDocComment(_ trivia: Trivia) -> Bool {
+    static func hasUnknownEffectDocComment(_ trivia: Trivia) -> Bool {
         docCommentLines(from: trivia).contains { line in
             guard let range = line.range(of: "@lint.effect") else { return false }
             return line[range.upperBound...].trimmingLeadingWhitespace().firstWord() == "unknown"
@@ -519,7 +519,7 @@ extension EffectAnnotationParser {
         }
     }
 
-    private static func hasClockDeterministicDocComment(_ trivia: Trivia) -> Bool {
+    static func hasClockDeterministicDocComment(_ trivia: Trivia) -> Bool {
         docCommentLines(from: trivia).contains { line in
             guard let range = line.range(of: "@lint.determinism") else { return false }
             let token = line[range.upperBound...].trimmingLeadingWhitespace().firstWord()
@@ -530,7 +530,7 @@ extension EffectAnnotationParser {
 
 // MARK: - Substring helpers
 
-private extension Substring {
+extension Substring {
 
     func trimmingLeadingWhitespace() -> Substring {
         var slice = self
