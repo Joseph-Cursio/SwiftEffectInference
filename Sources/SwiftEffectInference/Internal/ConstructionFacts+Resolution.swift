@@ -10,7 +10,10 @@ extension ConstructionFacts {
     /// the lexically preferred first. With no `site`, every declaration the spelling could mean.
     ///
     /// Asked once per scope: the answer is kept in the memo for every site that reads the same
-    /// scope (`LookupKey`).
+    /// scope (`LookupKey`). A resolution that comes back to itself with the same arguments —
+    /// through `Self`, whose expansion starts the depth bound and the aliases seen afresh, as
+    /// `typealias SubSequence = Self` in a nested type and a spelling of `SubSequence.Index` do —
+    /// would never end; that inner lookup names nothing, and the rest of the answer stands.
     func declarations(
         named components: [String],
         from site: Syntax?,
@@ -22,8 +25,9 @@ extension ConstructionFacts {
         }
         let key = LookupKey(components: components, site: site, depth: depth, aliasesSeen: aliasesSeen)
         if let known = memo.lookups[key] { return known }
+        guard memo.beginLookup(key) else { return [] }
         let found = resolve(components, from: site, depth: depth, aliasesSeen: aliasesSeen)
-        memo.lookups[key] = found
+        memo.endLookup(key, found: found)
         return found
     }
 

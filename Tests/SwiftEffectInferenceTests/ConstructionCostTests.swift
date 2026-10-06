@@ -15,6 +15,29 @@ import Testing
 @Suite("ConstructionFacts — cost budget")
 struct ConstructionCostTests {
 
+    /// swift-collections' `OrderedDictionary.Elements.SubSequence` declares `typealias SubSequence =
+    /// Self`. `SubSequence.Index`, read through it, is `Outer.SubSequence.Index`; with no such type,
+    /// the module-like head is dropped — and that is `SubSequence.Index` again, with the depth
+    /// bound started afresh by `Self`. It recursed until the stack ran out: a package with that
+    /// alias and any refutation crashed the build, and any judgement after it.
+    @Test("a lookup that comes back to itself ends, and what else it reached still counts", .timeLimit(.minutes(1)))
+    func lookupThatComesBackToItselfEnds() throws {
+        let loop = """
+        enum Outer {}
+        extension Outer { struct SubSequence {} }
+        extension Outer.SubSequence { typealias SubSequence = Self }
+        struct Marker { let id = UUID() }
+        func make() -> Any { SubSequence.Index() }
+        """
+        #expect(try constructionRefuted("make", in: loop) == false)
+
+        let elsewhere = """
+        struct Other { struct Index { let id = UUID() } }
+        enum Elsewhere { typealias SubSequence = Other }
+        """
+        #expect(try constructionRefuted("make", in: loop, elsewhere))
+    }
+
     /// A lookup is kept per scope, not per site — so the key has to say where in that scope the
     /// site is. From a class's inheritance clause the class's own members are out of reach; from
     /// its body they are in. Here `Base` means the outer class in one and the nested struct in the

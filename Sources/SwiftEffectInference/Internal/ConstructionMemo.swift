@@ -35,7 +35,25 @@ final class ConstructionMemo: @unchecked Sendable {
 
     // MARK: - For the whole build
 
-    var lookups: [LookupKey: [Int]] = [:]
+    private(set) var lookups: [LookupKey: [Int]] = [:]
+    /// The lookups being resolved.
+    private var resolving: Set<LookupKey> = []
+
+    /// Marks `key` as being resolved; `false` when it already is — the resolution has come back
+    /// to a lookup it is inside of, with the same arguments, and would never end.
+    func beginLookup(_ key: LookupKey) -> Bool {
+        resolving.insert(key).inserted
+    }
+
+    /// Ends `key`'s resolution with `found`.
+    ///
+    /// Kept even when a lookup inside it was cut short by coming back to one outside it. That
+    /// answer is only where the loop was entered from, but no lookup that ends without the cut
+    /// can ever read it: reading it means asking a lookup that, asked afresh, loops forever.
+    func endLookup(_ key: LookupKey, found: [Int]) {
+        resolving.remove(key)
+        lookups[key] = found
+    }
 }
 
 /// A lookup's arguments, with the site replaced by what of it the resolution reads.
