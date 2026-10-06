@@ -8,12 +8,26 @@ extension ConstructionFacts {
 
     /// The declarations `components` (as written, `["Outer", "Inner"]`) could name from `site`,
     /// the lexically preferred first. With no `site`, every declaration the spelling could mean.
+    ///
+    /// Asked once per scope: the answer is kept in the memo for every site that reads the same
+    /// scope (`LookupKey`).
     func declarations(
         named components: [String],
         from site: Syntax?,
         depth: Int = 0,
         aliasesSeen: Set<String> = []
     ) -> [Int] {
+        guard let memo = memo.instance else {
+            return memoised().declarations(named: components, from: site, depth: depth, aliasesSeen: aliasesSeen)
+        }
+        let key = LookupKey(components: components, site: site, depth: depth, aliasesSeen: aliasesSeen)
+        if let known = memo.lookups[key] { return known }
+        let found = resolve(components, from: site, depth: depth, aliasesSeen: aliasesSeen)
+        memo.lookups[key] = found
+        return found
+    }
+
+    private func resolve(_ components: [String], from site: Syntax?, depth: Int, aliasesSeen: Set<String>) -> [Int] {
         guard let head = components.first, !head.isEmpty, depth < 6 else { return [] }
         if head == "Self" { return selfDeclarations(components, from: site) }
         guard let bareName = components.last, !bareName.isEmpty else { return [] }

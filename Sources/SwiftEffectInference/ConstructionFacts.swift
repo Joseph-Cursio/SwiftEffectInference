@@ -97,6 +97,9 @@ public struct ConstructionFacts: Sendable, Equatable {
     var memberTypes: [String: [String: [MemberType]]] = [:]
     /// Stored, not computed: the inferrer asks on every body it judges.
     var hasRefutations = false
+    /// What has been worked out already — attached by `build(from:)` for its passes, and by a walk
+    /// over a body for that walk. Never part of what the table says, nor of its equality.
+    var memo = ConstructionMemo.Slot()
 
     /// No facts — the same as `ConstructionFacts.empty`.
     public init() {}
@@ -142,6 +145,9 @@ public struct ConstructionFacts: Sendable, Equatable {
         let raws = collector.finish()
 
         var facts = ConstructionFacts(declarations: raws.map(\.unjudged), collector: collector)
+        // One memo for every pass: what names mean, no pass changes.
+        let memo = ConstructionMemo()
+        facts.memo.instance = memo
 
         // Monotone: a better-informed inferrer refutes a superset of what a less-informed one
         // does, and a witness once found is kept, so each pass only fills empty slots. It stops
@@ -163,6 +169,8 @@ public struct ConstructionFacts: Sendable, Equatable {
             refuted = nowRefuted
             pass += 1
         }
+        // The table leaves the build without it: a consumer may share the table between threads.
+        facts.memo.instance = nil
         return facts
     }
 
@@ -189,8 +197,17 @@ public struct ConstructionFacts: Sendable, Equatable {
 
     /// The refutation constructing anything in `syntax` incurs — the first in source order.
     func refutation(constructingIn syntax: Syntax) -> PurityRefutation? {
-        let checker = ConstructionChecker(facts: self)
+        let checker = ConstructionChecker(facts: memoised())
         checker.walk(syntax)
         return checker.refutation
+    }
+
+    /// `self` with a memo: the build's, while one is attached, or else a new one, kept as long as
+    /// the copy is — for a walk over one body, or one question asked outside a build.
+    func memoised() -> ConstructionFacts {
+        guard memo.instance == nil else { return self }
+        var facts = self
+        facts.memo.instance = ConstructionMemo()
+        return facts
     }
 }
