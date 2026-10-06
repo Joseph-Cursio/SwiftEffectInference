@@ -188,4 +188,48 @@ struct ConstructionTypealiasTests {
             #expect(try constructionRefutation(of: "make", in: sources) == nil, "\(sources)")
         }
     }
+
+    // MARK: - Qualified spellings
+
+    /// `Outer.Stamp` names the alias `Outer` declares: it is followed like a head alias, and a
+    /// framework type behind it is judged — not only a package type, which the head-dropping
+    /// fallback already reached.
+    @Test("an alias named as a member of its type is followed", arguments: [
+        "enum Outer { typealias Stamp = UUID }\nstruct T { let s: Outer.Stamp = .init() }\nfunc f() -> T { T() }",
+        """
+        enum Outer { enum Inner { typealias Stamp = UUID } }
+        struct T { let s: Outer.Inner.Stamp = .init() }
+        func f() -> T { T() }
+        """,
+        """
+        enum Outer {}
+        extension Outer { typealias Stamp = Date }
+        struct T { var at: Outer.Stamp = .now; let n: Int }
+        func f(_ n: Int) -> T { T(n: n) }
+        """,
+        """
+        enum Outer { typealias Clock = ContinuousClock }
+        struct T { var start: Outer.Clock.Instant = .now }
+        func f() -> T { T() }
+        """,
+        """
+        typealias Space = Outer
+        enum Outer { typealias Stamp = UUID }
+        struct T { let s: Space.Stamp = .init() }
+        func f() -> T { T() }
+        """
+    ])
+    func memberAlias(source: String) throws {
+        #expect(try constructionRefuted("f", in: source), "\(source)")
+    }
+
+    @Test("a member alias is the one its owner declares, not a namesake elsewhere")
+    func memberAliasTakesItsOwner() throws {
+        #expect(try !constructionRefuted("f", in: """
+        enum Outer { typealias Stamp = String }
+        enum Other { typealias Stamp = UUID }
+        struct T { var s: Outer.Stamp = .init() }
+        func f() -> T { T() }
+        """))
+    }
 }
