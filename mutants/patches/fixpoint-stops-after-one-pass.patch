@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/ConstructionFacts.swift b/Sources/SwiftEffectInference/ConstructionFacts.swift
+index af75dd1..1e8998b 100644
+--- a/Sources/SwiftEffectInference/ConstructionFacts.swift
++++ b/Sources/SwiftEffectInference/ConstructionFacts.swift
+@@ -153,7 +153,7 @@ public struct ConstructionFacts: Sendable, Equatable {
+             next.hasRefutations = next.declarations.contains { $0.anyRefutation != nil }
+             let nowRefuted = next.declarations.reduce(0) { $0 + $1.refutedSlotCount }
+             facts = next
+-            if nowRefuted == refuted { break }
++            break
+             refuted = nowRefuted
+             pass += 1
+         }

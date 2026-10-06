@@ -1,0 +1,12 @@
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift b/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
+index 0379716..bac77f0 100644
+--- a/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
+@@ -461,7 +461,6 @@ final class TypeShapeCollector: SyntaxVisitor {
+         raw.inheritedNames = Self.inheritedNames(inheritance)
+         if kind == .enumeration, let first = raw.inheritedNames.first, Self.rawValueTypes.contains(first) {
+             // An enum with a raw type conforms to RawRepresentable without saying so.
+-            raw.inheritedNames.append("RawRepresentable")
+         }
+         for decl in Self.flattened(members) {
+             if let initializer = decl.as(InitializerDeclSyntax.self) {

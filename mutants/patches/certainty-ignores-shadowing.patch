@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+index c633a61..b15405a 100644
+--- a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+@@ -24,7 +24,7 @@ extension ConstructionFacts {
+             let chain = Self.enclosingTypeChain(of: site)
+             // Certain only in the innermost declaration, and only when nothing at the site can
+             // shadow the head: there no extension context and no superclass member stands between.
+-            if let innermost = chain.last, !innermost.isExtension, !Self.isShadowed(head, at: site) {
++            if let innermost = chain.last, !innermost.isExtension {
+                 let certain = indices(bareName).filter {
+                     declarations[$0].qualifiedName == innermost.name + "." + written
+                 }

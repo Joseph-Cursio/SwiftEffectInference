@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionChecker.swift b/Sources/SwiftEffectInference/Internal/ConstructionChecker.swift
+index 7d4a4b6..b44317b 100644
+--- a/Sources/SwiftEffectInference/Internal/ConstructionChecker.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionChecker.swift
+@@ -67,7 +67,7 @@ final class ConstructionChecker: SourceAccurateSyntaxVisitor {
+         guard let base = member.base else {
+             // A base-less `.init(…)` names no type; its context may. Without one, a labelled call
+             // is matched by shape against every type; an unlabelled one stays open.
+-            let expected = expectedTypes(of: Syntax(call))
++            let expected: [[String]] = []
+             if !expected.isEmpty {
+                 return (expected.flatMap { facts.declarations(named: $0, from: Syntax(call)) }, false)
+             }

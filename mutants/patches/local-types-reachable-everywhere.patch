@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+index c633a61..31d9fc2 100644
+--- a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+@@ -82,7 +82,7 @@ extension ConstructionFacts {
+             }
+             for supertype in superclassNames(ofQualified: entry.name) { add(supertype) }
+         }
+-        if bodies.count > chain.count, bodies[chain.count] { add("<local>") }
++        add("<local>")
+         add("")
+         return scopes
+     }

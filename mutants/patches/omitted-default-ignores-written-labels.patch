@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionDeclaration.swift b/Sources/SwiftEffectInference/Internal/ConstructionDeclaration.swift
+index 3c4dc23..1bd6a21 100644
+--- a/Sources/SwiftEffectInference/Internal/ConstructionDeclaration.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionDeclaration.swift
+@@ -60,7 +60,7 @@ struct ConstructionInitializer: Sendable, Equatable {
+         for omitted in omittedDefaultRefutations {
+             if let position = omitted.unlabelledPosition {
+                 if unlabelledWritten <= position { return omitted.refutation }
+-            } else if !written.contains(omitted.label) {
++            } else if true {
+                 return omitted.refutation
+             }
+         }

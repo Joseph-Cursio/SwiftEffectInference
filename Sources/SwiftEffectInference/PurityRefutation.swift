@@ -91,6 +91,10 @@ public enum PurityRefutation: Sendable, Equatable {
     /// *`now` has a bad default* is not.
     indirect case refutingDefaultArgument(parameter: String, cause: PurityRefutation)
 
+    /// Constructing a type runs code the body does not show — a stored property's default, the
+    /// initializer the call reaches, or a superclass's — and that code refutes purity.
+    indirect case refutingConstruction(type: String, via: ConstructionStep, cause: PurityRefutation)
+
     /// A `throws` function propagates an error out of a callee — a `try`
     /// anywhere in the body. The throw, and whatever else the callee does, come
     /// from beyond what a leaf can see, so doubt refutes.
@@ -109,6 +113,16 @@ public enum PurityRefutation: Sendable, Equatable {
     /// An accessor block carries something other than a getter. Carries the
     /// specifier as written (`"set"`, `"willSet"`, `"didSet"`, `"_modify"`).
     case notAGetter(String)
+
+    /// Which part of a construction ran the refuting code.
+    public enum ConstructionStep: Sendable, Equatable {
+        /// `let id = UUID()` — runs on every construction.
+        case storedProperty(String)
+        /// `init(title:)` as written — its body, or a default the call omitted.
+        case initializer(String)
+        /// The class inherits a construction that refutes.
+        case superclass(String)
+    }
 
     /// Which trap breaks totality.
     public enum Partiality: Sendable, Equatable {
@@ -163,6 +177,20 @@ extension PurityRefutation: CustomStringConvertible {
 
         case .refutingDefaultArgument(let parameter, let cause):
             return "the default value of `\(parameter)` \(cause)"
+
+        case .refutingConstruction(let type, .storedProperty(let property), let cause):
+            return "constructs `\(type)`, and the default value of its stored property `\(property)` \(cause)"
+
+        case .refutingConstruction(
+            let type, .initializer(let signature), .refutingDefaultArgument(let parameter, let cause)
+        ):
+            return "constructs `\(type)` through `\(signature)` without `\(parameter)`, whose default \(cause)"
+
+        case .refutingConstruction(let type, .initializer(let signature), let cause):
+            return "constructs `\(type)` through `\(signature)`, whose body \(cause)"
+
+        case .refutingConstruction(let type, .superclass(let base), let cause):
+            return "constructs `\(type)`, a subclass of `\(base)`, which \(cause)"
 
         case .propagatedTry:
             return "propagates an error out of a callee (`try`)"

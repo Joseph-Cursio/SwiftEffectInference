@@ -1,0 +1,12 @@
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift b/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
+index 0379716..13cdb2b 100644
+--- a/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
+@@ -266,7 +266,6 @@ struct RawDeclaration {
+     private static func implicitMembers(in value: ExprSyntax) -> [String] {
+         final class Finder: SyntaxVisitor {
+             var found: [String] = []
+-            override func visit(_ node: ClosureExprSyntax) -> SyntaxVisitorContinueKind { .skipChildren }
+             override func visit(_ node: MemberAccessExprSyntax) -> SyntaxVisitorContinueKind {
+                 guard node.base == nil else { return .visitChildren }
+                 if let call = node.parent?.as(FunctionCallExprSyntax.self), call.calledExpression.id == node.id {

@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionChecker.swift b/Sources/SwiftEffectInference/Internal/ConstructionChecker.swift
+index 7d4a4b6..a656a8c 100644
+--- a/Sources/SwiftEffectInference/Internal/ConstructionChecker.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionChecker.swift
+@@ -314,7 +314,7 @@ extension ConstructionChecker {
+         // Written inside the declaration itself, its own property is meant; in an extension, any
+         // declaration of that name may be the one extended.
+         let declaration = Self.enclosingTypeDeclaration(of: Syntax(left))
+-        let own = members.filter { $0.declaration == declaration }
++        let own: [MemberType] = []
+         return (own.isEmpty ? members : own).map { .type($0.type) }
+     }
+ 

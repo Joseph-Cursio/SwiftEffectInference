@@ -1,0 +1,12 @@
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift b/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
+index 0379716..1825eb5 100644
+--- a/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
+@@ -579,7 +579,6 @@ final class TypeShapeCollector: SyntaxVisitor {
+         if !exact.isEmpty { return exact }
+         guard let bare = extended.last else { return [] }
+         // A protocol's name: its extension is the protocol's, whatever nested type shares the name.
+-        if extended.count == 1, protocolNames.contains(bare) { return [] }
+         let byName = raws.indices.filter { raws[$0].bareName == bare }
+         if !byName.isEmpty { return byName }
+         let aliased = (aliasTargets[bare] ?? []).compactMap(\.last)

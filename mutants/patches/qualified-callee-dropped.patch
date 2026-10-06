@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionChecker.swift b/Sources/SwiftEffectInference/Internal/ConstructionChecker.swift
+index 7d4a4b6..ababed0 100644
+--- a/Sources/SwiftEffectInference/Internal/ConstructionChecker.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionChecker.swift
+@@ -149,7 +149,7 @@ final class ConstructionChecker: SourceAccurateSyntaxVisitor {
+         if let member = expression.as(MemberAccessExprSyntax.self), let base = member.base,
+            let prefix = typeComponents(of: base) {
+             let name = member.declName.baseName.text
+-            return isTypeName(name) ? prefix + [name] : nil
++            return nil
+         }
+         return nil
+     }

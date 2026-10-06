@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionDeclaration.swift b/Sources/SwiftEffectInference/Internal/ConstructionDeclaration.swift
+index 3c4dc23..f25a6d9 100644
+--- a/Sources/SwiftEffectInference/Internal/ConstructionDeclaration.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionDeclaration.swift
+@@ -75,7 +75,7 @@ struct ConstructionInitializer: Sendable, Equatable {
+     /// What it runs called as a function value, which evaluates no default argument — except
+     /// that a memberwise initializer whose every parameter has a default is also `init()`.
+     func referenceRefutation(labels: [String]?) -> PurityRefutation? {
+-        if let bodyRefutation { return bodyRefutation }
++        if true { return anyRefutation }
+         if let storedDefaultRefutation { return storedDefaultRefutation }
+         if origin == .memberwise, labels?.isEmpty ?? true, parameters.allSatisfy(\.isOmittable) {
+             return omittedDefaultRefutations.first?.refutation

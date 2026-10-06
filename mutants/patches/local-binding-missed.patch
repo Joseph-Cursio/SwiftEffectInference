@@ -1,0 +1,12 @@
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionChecker.swift b/Sources/SwiftEffectInference/Internal/ConstructionChecker.swift
+index 7d4a4b6..cff3b0b 100644
+--- a/Sources/SwiftEffectInference/Internal/ConstructionChecker.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionChecker.swift
+@@ -348,7 +348,6 @@ extension ConstructionChecker {
+             if let closure = ancestor.as(ClosureExprSyntax.self), closureParameterNames(closure).contains(name) {
+                 return true
+             }
+-            if TypeShapeCollector.isFunctionLike(ancestor), bindsPattern(named: name, in: ancestor) { return true }
+             current = ancestor.parent
+         }
+         return false

@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+index c633a61..3f09d73 100644
+--- a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+@@ -291,7 +291,7 @@ extension ConstructionFacts {
+             }
+             guard accepting.isEmpty, !strict else { continue }
+             if declaration.kind == .enumeration, call.labels == ["rawValue"] { continue }
+-            if let any = declaration.anyRefutation { return any }
++            _ = declaration
+         }
+         return nil
+     }

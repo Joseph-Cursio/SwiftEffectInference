@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift b/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
+index 0379716..4521911 100644
+--- a/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
+@@ -476,7 +476,7 @@ final class TypeShapeCollector: SyntaxVisitor {
+ 
+     private func recordStorage(_ variable: VariableDeclSyntax, of qualifiedName: String, into raw: inout RawDeclaration) {
+         let modifiers = variable.modifiers.map(\.name.tokenKind)
+-        if modifiers.contains(.keyword(.static)) || modifiers.contains(.keyword(.class)) { return }
++        if modifiers.contains(.keyword(.class)) { return }
+         let isLazy = modifiers.contains(.keyword(.lazy))
+         let isLet = variable.bindingSpecifier.tokenKind == .keyword(.let)
+         let attributes = variable.attributes.compactMap { element -> AttributeSyntax? in

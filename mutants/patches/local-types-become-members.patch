@@ -1,0 +1,12 @@
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+index c633a61..98e1c35 100644
+--- a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+@@ -423,7 +423,6 @@ extension ConstructionFacts {
+                 // An extension names its type in full, so it restarts the qualification.
+                 prefix = [name]
+             } else {
+-                if crossedBody { prefix.append("<local>") }
+                 prefix.append(name)
+             }
+             crossedBody = false

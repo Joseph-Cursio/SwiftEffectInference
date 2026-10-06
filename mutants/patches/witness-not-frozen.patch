@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/ConstructionFacts.swift b/Sources/SwiftEffectInference/ConstructionFacts.swift
+index af75dd1..414581c 100644
+--- a/Sources/SwiftEffectInference/ConstructionFacts.swift
++++ b/Sources/SwiftEffectInference/ConstructionFacts.swift
+@@ -149,7 +149,7 @@ public struct ConstructionFacts: Sendable, Equatable {
+             let fresh = raws.map { $0.evaluate(with: inferrer, facts: facts) }
+             if pass == 0 { bound = fresh.reduce(2) { $0 + $1.slotCount } }
+             var next = facts
+-            next.declarations = zip(fresh, facts.declarations).map { $0.keeping($1) }
++            next.declarations = fresh
+             next.hasRefutations = next.declarations.contains { $0.anyRefutation != nil }
+             let nowRefuted = next.declarations.reduce(0) { $0 + $1.refutedSlotCount }
+             facts = next
