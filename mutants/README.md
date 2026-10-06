@@ -67,6 +67,19 @@ Requires a clean working tree.
 | `alias-takes-the-first-collected` | construction-hole | killed | `nestedAliasNamesakes` |
 | `alias-hides-the-written-name` | construction-hole | killed | `aliasDoesNotHijackAFrameworkName` |
 | `alias-scope-ignored` | construction-control | killed | `constructionThroughNestedAlias` |
+| `lookup-loop-not-cut` | construction-memo | killed | `lookupThatComesBackToItselfEnds` |
+| `lookup-asked-afresh` | construction-memo | killed | `spellingIsResolvedOncePerScope` |
+| `lookup-key-forgets-the-scope` | construction-control | killed | `spellingIsResolvedOncePerScope` |
+| `lookup-key-forgets-where-the-site-is` | construction-hole | killed | `inheritanceClauseAndBodyAreDifferentLookups` |
+| `walk-outlives-its-pass` | construction-hole | killed | `longDelegationChain` |
+| `decode-answer-outlives-its-pass` | construction-hole | killed | `decodeAnswerFollowsThePass` |
+| `decode-proof-trusts-a-skip` | construction-hole | killed | `decodeThroughACycle` |
+| `decode-asked-afresh` | construction-memo | killed | `decodeIsSearchedOncePerType` |
+| `decode-proof-ignored` | construction-memo | killed | `decodeIsSearchedOncePerType` |
+| `fit-asked-afresh` | construction-memo | killed | `shapeGuessUpNamesakeChains` |
+| `fit-forgets-the-depth` | construction-control | killed | `shapeGuessUpNamesakeChains` |
+| `reference-asked-afresh` | construction-memo | killed | `referenceUpNamesakeChains` |
+| `built-table-keeps-its-memo` | construction-memo | killed | `builtTableHandsOnOnlyWhatNamesMean` |
 
 The first two attack the join-semilattice the whole effect analysis rests on: a
 `lub` that returns the safer effect would launder a dangerous one into a safe grade,
@@ -129,6 +142,22 @@ puts that back. `alias-hides-the-written-name` lets an alias replace the
 name it shares, where that name may be a framework type's. The control,
 `alias-scope-ignored`, forgets that an alias its own type declares is
 certain, and so charges A for B's alias.
+
+## `construction-memo`: what the memo may keep
+
+`ConstructionMemo` keeps what names mean for a whole build, and what is refuted for one
+pass, so that no question about constructing a type is answered twice. Its mutants
+either keep too much — an answer read back in a scope or a pass it was not given for,
+which changes verdicts, and is a `construction-hole` or `-control` like any other — or
+are `construction-memo`: keep nothing, or keep it where no verdict reads it, which
+changes no verdict, only what reaching one costs or who may share the table. Two of
+those are killed by a clock: the shape guess and the initializer
+reference up namesake chains, each over a minute without its memo, so each takes that
+long to kill. A clock cannot see the rest — once names are kept, a search afresh is
+cheap on any graph a test can build — so the memo counts resolutions and decode steps,
+and the tests count with it. `lookup-loop-not-cut` is killed by the stack running out;
+`built-table-keeps-its-memo` by the table a build returns still holding something a
+judgement writes to.
 
 ## Adding a mutant
 

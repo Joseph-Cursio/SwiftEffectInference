@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionMemo.swift b/Sources/SwiftEffectInference/Internal/ConstructionMemo.swift
+index 2cac5ef..187e2b3 100644
+--- a/Sources/SwiftEffectInference/Internal/ConstructionMemo.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionMemo.swift
+@@ -133,7 +133,7 @@ struct LookupKey: Hashable, Sendable {
+         var current = site
+         while let node = current, !Self.isRead(node) { current = node.parent }
+         scope = current
+-        siteIsScope = current != nil && current == site
++        siteIsScope = false
+     }
+ 
+     /// Whether a resolution reads `node` when it encloses a site: a type declaration or extension,

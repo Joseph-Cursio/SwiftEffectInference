@@ -1,0 +1,12 @@
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+index ef66612..4a900fe 100644
+--- a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+@@ -426,7 +426,6 @@ extension ConstructionFacts {
+     /// pass can change the answer.
+     func decodeRefutation(_ index: Int) -> PurityRefutation? {
+         guard let memo = memo.instance else { return memoised().decodeRefutation(index) }
+-        if let known = memo.decodes[index] { return known }
+         var visited: Set<Int> = []
+         let found = decodeSearch(index, visited: &visited, memo: memo).refutation
+         // A search from one declaration that finds nothing went everywhere its decoding reaches.

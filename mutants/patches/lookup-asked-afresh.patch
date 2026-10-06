@@ -1,0 +1,12 @@
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+index ef66612..15058a0 100644
+--- a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+@@ -26,7 +26,6 @@ extension ConstructionFacts {
+         let key = LookupKey(components: components, site: site, depth: depth, aliasesSeen: aliasesSeen)
+         let settled = self.memo.settled.lookups
+         if !settled.isEmpty, let known = settled[key] { return known }
+-        if let known = memo.lookups[key] { return known }
+         guard memo.beginLookup(key) else { return [] }
+         let found = resolve(components, from: site, depth: depth, aliasesSeen: aliasesSeen)
+         memo.endLookup(key, found: found)
