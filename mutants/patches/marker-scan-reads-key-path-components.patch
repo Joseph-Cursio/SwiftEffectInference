@@ -1,0 +1,15 @@
+diff --git a/Sources/SwiftEffectInference/PurityInferrer.swift b/Sources/SwiftEffectInference/PurityInferrer.swift
+index 7109863..6aa9d0b 100644
+--- a/Sources/SwiftEffectInference/PurityInferrer.swift
++++ b/Sources/SwiftEffectInference/PurityInferrer.swift
+@@ -564,10 +564,6 @@ public struct PurityInferrer: Sendable {
+     /// `rows.map { $0.random }` included, because a member can be a static method: `Int.random`.
+     static func isMarkerPosition(_ token: TokenSyntax) -> Bool {
+         guard case .identifier = token.tokenKind else { return false }
+-        if let reference = token.parent?.as(DeclReferenceExprSyntax.self),
+-           reference.parent?.is(KeyPathPropertyComponentSyntax.self) == true {
+-            return false
+-        }
+         return true
+     }
+ 
