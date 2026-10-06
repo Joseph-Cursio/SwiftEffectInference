@@ -1,5 +1,5 @@
 diff --git a/Sources/SwiftEffectInference/PurityInferrer.swift b/Sources/SwiftEffectInference/PurityInferrer.swift
-index 5c81c46..4b455ec 100644
+index 7109863..e7ee807 100644
 --- a/Sources/SwiftEffectInference/PurityInferrer.swift
 +++ b/Sources/SwiftEffectInference/PurityInferrer.swift
 @@ -550,7 +550,7 @@ public struct PurityInferrer: Sendable {
@@ -10,4 +10,4 @@ index 5c81c46..4b455ec 100644
 +        return nil
      }
  
-     /// What constructing a type runs, judged on the **transparency half only** — markers, the
+     /// Whether `token` is where a marker can be: an identifier, and not a key path's component.

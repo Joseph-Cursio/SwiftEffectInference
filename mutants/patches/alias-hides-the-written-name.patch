@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+index 9f08b46..fc148b6 100644
+--- a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+@@ -198,7 +198,7 @@ extension ConstructionFacts {
+     func spellings(of components: [String], from site: Syntax?, aliasesSeen: Set<String> = []) -> [[String]] {
+         guard let head = components.first, !aliasesSeen.contains(head) else { return [components] }
+         let meant = aliases(named: head, from: site)
+-        var result = meant.isCertain ? [] : [components]
++        var result: [[String]] = []
+         for alias in meant.candidates {
+             let expanded = alias.target + components.dropFirst()
+             for spelling in spellings(of: expanded, from: alias.site, aliasesSeen: aliasesSeen.union([head]))

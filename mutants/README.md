@@ -64,13 +64,16 @@ Requires a clean working tree.
 | `member-types-merged` | construction-control | killed | `memberTypesPerDeclaration` |
 | `reference-charged-as-any-path` | construction-control | killed | `referenceOmitsNoDefault` |
 | `implicit-super-init-ignored` | construction-hole | killed | `implicitSuperInitializer` |
+| `alias-takes-the-first-collected` | construction-hole | killed | `nestedAliasNamesakes` |
+| `alias-hides-the-written-name` | construction-hole | killed | `aliasDoesNotHijackAFrameworkName` |
+| `alias-scope-ignored` | construction-control | killed | `constructionThroughNestedAlias` |
 
 The first two attack the join-semilattice the whole effect analysis rests on: a
 `lub` that returns the safer effect would launder a dangerous one into a safe grade,
 and a rank collision breaks the total order §26.3.3 deliberately keeps linear. The
 third makes the purity inferrer admit `Date()` — the unearned-purity it exists to
 refute (§26.3.1). All eight verified killed; the construction mutants below,
-thirty-one more, likewise.
+thirty-four more, likewise.
 
 ## `purity-witness`: a shape about what the oracle *says*
 
@@ -116,6 +119,16 @@ the superclass, the shape guess already matched a labelled `.init`, the fixpoint
 already stopped on a stable count. Each now has a test that sees what the mutant
 still changes: the public `refutedTypeNames`, a witness kept across passes, the
 unseen-initializer fallback, and a context that types an unlabelled `.init()`.
+
+The three `alias-*` mutants come from one bug. Typealiases were followed
+by bare name, and the first one collected won. Which types refuted then
+depended on source order: B's `typealias Stamp = UUID` default went
+unseen behind A's `Stamp = String`, and a `typealias UUID = String` in
+one type hid a real `UUID` in every other. `alias-takes-the-first-collected`
+puts that back. `alias-hides-the-written-name` lets an alias replace the
+name it shares, where that name may be a framework type's. The control,
+`alias-scope-ignored`, forgets that an alias its own type declares is
+certain, and so charges A for B's alias.
 
 ## Adding a mutant
 
