@@ -172,6 +172,25 @@ struct ConstructionPurityRoundTwoTests {
         }
     }
 
+    @Test("a decode is judged by every init(from:) the type has, whatever order the files come in")
+    func everyDecodingInitializer() throws {
+        let linux = """
+        struct Event: Decodable { let at: Double }
+        #if os(Linux)
+        extension Event { init(from decoder: Decoder) throws { at = 0 } }
+        #endif
+        func parse(_ d: Data) -> Event? { try? JSONDecoder().decode(Event.self, from: d) }
+        """
+        let apple = """
+        #if !os(Linux)
+        extension Event { init(from decoder: Decoder) throws { at = Date().timeIntervalSince1970 } }
+        #endif
+        """
+        for sources in [[linux, apple], [apple, linux]] {
+            #expect(try constructionRefutation(of: "parse", in: sources) != nil, "\(sources)")
+        }
+    }
+
     // MARK: - Protocol-extension initializers
 
     @Test("a protocol-extension initializer reaches every conformer, however it conforms", arguments: [

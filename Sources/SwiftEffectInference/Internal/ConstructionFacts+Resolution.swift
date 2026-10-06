@@ -377,8 +377,9 @@ extension ConstructionFacts {
         guard visited.insert(index).inserted else { return nil }
         let declaration = declarations[index]
         if let own = declaration.unconditional ?? declaration.conditionalStoredDefault { return own }
-        let decoder = declaration.initializers.first { $0.parameters.map(\.label) == ["from"] }
-        if let body = decoder?.bodyRefutation {
+        // Every one: `#if` branches may each declare their own.
+        let decoders = declaration.initializers.filter { $0.parameters.map(\.label) == ["from"] }
+        if let body = decoders.lazy.compactMap(\.bodyRefutation).first {
             return body
         }
         if declaration.kind == .classOrActor {
