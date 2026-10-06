@@ -65,6 +65,254 @@
       "expected": "killed",
       "test": "firstTrapWins",
       "label": "keep the last trap the walker saw rather than the first -- no purity answer changes and no walker short-circuits, so the reported witness becomes a fact about tree order"
+    },
+    {
+      "id": "construction-facts-ignored",
+      "patch": "patches/construction-facts-ignored.patch",
+      "shape": "construction-hole",
+      "expected": "killed",
+      "test": "healthRecommendationShapeIsRefuted",
+      "label": "the configured inferrer never consults its construction facts — the HealthRecommendation hole is open again"
+    },
+    {
+      "id": "construction-matched-as-bare-token",
+      "patch": "patches/construction-matched-as-bare-token.patch",
+      "shape": "construction-control",
+      "expected": "killed",
+      "test": "typeMentionStaysPure",
+      "label": "any mention of a refuted type refutes — a parameter or annotation naming the type is treated as constructing it"
+    },
+    {
+      "id": "static-default-runs-on-construction",
+      "patch": "patches/static-default-runs-on-construction.patch",
+      "shape": "construction-control",
+      "expected": "killed",
+      "test": "staticAndLazyDefaultsDoNotRefute",
+      "label": "a static stored default is recorded as running on every construction"
+    },
+    {
+      "id": "construction-witness-drops-the-type",
+      "patch": "patches/construction-witness-drops-the-type.patch",
+      "shape": "construction-witness",
+      "expected": "killed",
+      "test": "healthRecommendationShapeIsRefuted",
+      "label": "a stored-default witness loses the type and property — the bare UUID marker is reported with no hint of where it lives"
+    },
+    {
+      "id": "fixpoint-stops-after-one-pass",
+      "patch": "patches/fixpoint-stops-after-one-pass.patch",
+      "shape": "construction-hole",
+      "expected": "killed",
+      "test": "nestedFactTypePropagates",
+      "label": "the build stops after one pass — a default constructing another refuted type is never refuted"
+    },
+    {
+      "id": "omitted-default-ignores-written-labels",
+      "patch": "patches/omitted-default-ignores-written-labels.patch",
+      "shape": "construction-control",
+      "expected": "killed",
+      "test": "passingTheDefaultedLabelStaysPure",
+      "label": "every labelled defaulted parameter counts as omitted — the fixed shape, passing the identity in, is refuted"
+    },
+    {
+      "id": "unlabelled-default-always-omitted",
+      "patch": "patches/unlabelled-default-always-omitted.patch",
+      "shape": "construction-control",
+      "expected": "killed",
+      "test": "suppliedUnlabelledDefault",
+      "label": "an unlabelled defaulted parameter counts as omitted even when the call writes it — Stamp(l, d) is refuted"
+    },
+    {
+      "id": "construction-follows-traps",
+      "patch": "patches/construction-follows-traps.patch",
+      "shape": "construction-control",
+      "expected": "killed",
+      "test": "trappingInitializerIsNotFollowed",
+      "label": "construction is judged on totality too — a callee's precondition refutes the caller"
+    },
+    {
+      "id": "qualified-callee-dropped",
+      "patch": "patches/qualified-callee-dropped.patch",
+      "shape": "construction-hole",
+      "expected": "killed",
+      "test": "everySpellingReachesTheFact",
+      "label": "a qualified callee (Models.T(…)) is not read as a type"
+    },
+    {
+      "id": "superclass-not-inherited",
+      "patch": "patches/superclass-not-inherited.patch",
+      "shape": "construction-hole",
+      "expected": "killed",
+      "test": "superclassPropagates",
+      "label": "a subclass does not inherit its superclass's unconditional construction"
+    },
+    {
+      "id": "initializer-body-ignored",
+      "patch": "patches/initializer-body-ignored.patch",
+      "shape": "construction-hole",
+      "expected": "killed",
+      "test": "explicitInitializerBody",
+      "label": "an initializer's body is never judged — self.id = UUID() in init(title:) goes unseen"
+    },
+    {
+      "id": "certainty-ignores-shadowing",
+      "patch": "patches/certainty-ignores-shadowing.patch",
+      "shape": "construction-hole",
+      "expected": "killed",
+      "test": "localTypealiasShadows",
+      "label": "a name a local typealias rebinds is still resolved with certainty to the member type"
+    },
+    {
+      "id": "local-types-become-members",
+      "patch": "patches/local-types-become-members.patch",
+      "shape": "construction-hole",
+      "expected": "killed",
+      "test": "localTypeDoesNotShadowOtherMethods",
+      "label": "a type declared inside a method is recorded as a member of the enclosing type and hides the real one from every other method"
+    },
+    {
+      "id": "local-types-reachable-everywhere",
+      "patch": "patches/local-types-reachable-everywhere.patch",
+      "shape": "construction-control",
+      "expected": "killed",
+      "test": "localTypeOutOfReach",
+      "label": "a type local to one top-level function is a candidate from any type's method — a clean Row is charged with a local namesake"
+    },
+    {
+      "id": "shape-guess-skips-the-fit",
+      "patch": "patches/shape-guess-skips-the-fit.patch",
+      "shape": "construction-control",
+      "expected": "killed",
+      "test": "shapeGuessNeedsAFit",
+      "label": "a contextless labelled .init(…) is charged to every type, whether or not any initializer of it takes those labels"
+    },
+    {
+      "id": "unseen-initializer-is-clean",
+      "patch": "patches/unseen-initializer-is-clean.patch",
+      "shape": "construction-hole",
+      "expected": "killed",
+      "test": "memberwiseShapes",
+      "label": "a call no known initializer accepts is judged clean — the IUO, lazy and protocol-initializer holes reopen"
+    },
+    {
+      "id": "witness-not-frozen",
+      "patch": "patches/witness-not-frozen.patch",
+      "shape": "construction-witness",
+      "expected": "killed",
+      "test": "recursiveConstructionConverges",
+      "label": "witnesses are re-derived every pass — a recursive construction never converges and its witness nests one level deeper per pass"
+    },
+    {
+      "id": "implicit-member-not-qualified",
+      "patch": "patches/implicit-member-not-qualified.patch",
+      "shape": "construction-hole",
+      "expected": "killed",
+      "test": "implicitMemberDefaults",
+      "label": "a base-less default (.now, .init()) is judged without its annotation — var created: Date = .now goes unseen"
+    },
+    {
+      "id": "implicit-member-outermost-type-only",
+      "patch": "patches/implicit-member-outermost-type-only.patch",
+      "shape": "construction-hole",
+      "expected": "killed",
+      "test": "nestedImplicitMembers",
+      "label": "a nested implicit member is judged only against the outermost type — let ids: Set<UUID> = [.init()] goes unseen"
+    },
+    {
+      "id": "closure-members-judged",
+      "patch": "patches/closure-members-judged.patch",
+      "shape": "construction-control",
+      "expected": "killed",
+      "test": "implicitMemberInClosureDefault",
+      "label": "an implicit member inside a closure default is judged against the annotation — the SwiftMarkdownWiki GitAdapterConfig over-refutation"
+    },
+    {
+      "id": "self-not-widened",
+      "patch": "patches/self-not-widened.patch",
+      "shape": "construction-hole",
+      "expected": "killed",
+      "test": "dynamicSelf",
+      "label": "Self in a protocol extension constructs nothing"
+    },
+    {
+      "id": "protocol-initializers-dropped",
+      "patch": "patches/protocol-initializers-dropped.patch",
+      "shape": "construction-hole",
+      "expected": "killed",
+      "test": "protocolExtensionInitializer",
+      "label": "a protocol extension's initializers are never attached to its conformers"
+    },
+    {
+      "id": "where-clause-refinement-ignored",
+      "patch": "patches/where-clause-refinement-ignored.patch",
+      "shape": "construction-hole",
+      "expected": "killed",
+      "test": "protocolExtensionInitializerConformers",
+      "label": "protocol Fancy where Self: Seedable is not a refinement — a Fancy conformer misses the Seedable initializer"
+    },
+    {
+      "id": "raw-value-enum-not-raw-representable",
+      "patch": "patches/raw-value-enum-not-raw-representable.patch",
+      "shape": "construction-hole",
+      "expected": "killed",
+      "test": "protocolExtensionInitializerConformers",
+      "label": "an enum with a raw type is not a RawRepresentable conformer — an extension RawRepresentable initializer goes unseen"
+    },
+    {
+      "id": "protocol-extension-taken-by-namesake",
+      "patch": "patches/protocol-extension-taken-by-namesake.patch",
+      "shape": "construction-hole",
+      "expected": "killed",
+      "test": "protocolExtensionInitializerConformers",
+      "label": "extension Model attaches to a nested struct Model instead of the protocol — its conformers miss the initializer"
+    },
+    {
+      "id": "contextual-init-ignored",
+      "patch": "patches/contextual-init-ignored.patch",
+      "shape": "construction-hole",
+      "expected": "killed",
+      "test": "contextualInitializerIsAttributed",
+      "label": "a base-less .init(…) is never typed by its context"
+    },
+    {
+      "id": "tuple-binds-by-position",
+      "patch": "patches/tuple-binds-by-position.patch",
+      "shape": "construction-hole",
+      "expected": "killed",
+      "test": "tupleShuffle",
+      "label": "a labelled tuple element is typed by its position — (b: .init(…), a: …) against (a: Clean, b: Dirty) is typed Clean"
+    },
+    {
+      "id": "local-binding-missed",
+      "patch": "patches/local-binding-missed.patch",
+      "shape": "construction-hole",
+      "expected": "killed",
+      "test": "assignmentToShadowingLocal",
+      "label": "an assignment to a local that shadows a stored property is typed by the property"
+    },
+    {
+      "id": "member-types-merged",
+      "patch": "patches/member-types-merged.patch",
+      "shape": "construction-control",
+      "expected": "killed",
+      "test": "memberTypesPerDeclaration",
+      "label": "two declarations of one name share their stored-property types — the clean Holder's assignment is charged with the other's"
+    },
+    {
+      "id": "reference-charged-as-any-path",
+      "patch": "patches/reference-charged-as-any-path.patch",
+      "shape": "construction-control",
+      "expected": "killed",
+      "test": "referenceOmitsNoDefault",
+      "label": "a function value T.init is charged for default arguments a reference never evaluates"
+    },
+    {
+      "id": "implicit-super-init-ignored",
+      "patch": "patches/implicit-super-init-ignored.patch",
+      "shape": "construction-hole",
+      "expected": "killed",
+      "test": "implicitSuperInitializer",
+      "label": "a designated initializer without super.init is not followed to the implicit super.init()"
     }
   ]
 }

@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+index c633a61..f23f6a3 100644
+--- a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+@@ -181,7 +181,7 @@ extension ConstructionFacts {
+         }
+         if selves.isEmpty, !protocolNames.contains(bare) { selves = indices(bare) }
+         if protocolNames.contains(bare) {
+-            selves += conformers(of: bare).filter { !selves.contains($0) }
++            selves += []
+         }
+         for index in selves where declarations[index].kind == .classOrActor && !declarations[index].isFinal {
+             selves += subtypes(of: [declarations[index].bareName]).filter { !selves.contains($0) }

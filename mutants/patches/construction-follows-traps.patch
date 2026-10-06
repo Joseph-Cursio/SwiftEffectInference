@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/PurityInferrer.swift b/Sources/SwiftEffectInference/PurityInferrer.swift
+index 5c81c46..b912a6f 100644
+--- a/Sources/SwiftEffectInference/PurityInferrer.swift
++++ b/Sources/SwiftEffectInference/PurityInferrer.swift
+@@ -557,7 +557,7 @@ public struct PurityInferrer: Sendable {
+     /// classifier, file reads and nested constructions, never totality. A trap in an initializer
+     /// is a trap in a callee, and no other callee's traps are followed either.
+     func constructionRefutation(_ syntax: Syntax) -> PurityRefutation? {
+-        refutingMarker(in: syntax)
++        bodyRefutation(syntax)
+     }
+ 
+     /// The first trap in `syntax`, or `nil` when nothing in it can trap at runtime.

@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift b/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
+index 0379716..5457288 100644
+--- a/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
+@@ -560,7 +560,7 @@ final class TypeShapeCollector: SyntaxVisitor {
+             }
+             for index in found { raws[index].initializers.append(.init(declaration: initializer, fromProtocol: false)) }
+         }
+-        if !protocolInitializers.isEmpty {
++        if false {
+             let facts = ConstructionFacts(
+                 declarations: raws.map(\.unjudged), protocolNames: protocolNames, protocolParents: protocolParents
+             )

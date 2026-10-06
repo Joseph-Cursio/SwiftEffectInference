@@ -1,0 +1,12 @@
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+index c633a61..423561b 100644
+--- a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+@@ -276,7 +276,6 @@ extension ConstructionFacts {
+     ) -> PurityRefutation? {
+         for index in candidates where visited.insert(index).inserted {
+             let declaration = declarations[index]
+-            if strict, !mayFit(call, index) { continue }
+             if let unconditional = declaration.unconditional { return unconditional }
+             let accepting = declaration.accepting(call)
+             for initializer in accepting {

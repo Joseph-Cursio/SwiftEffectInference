@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift b/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
+index 0379716..32d6880 100644
+--- a/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
+@@ -50,7 +50,7 @@ struct RawDeclaration {
+     func evaluate(with inferrer: PurityInferrer, facts: ConstructionFacts) -> ConstructionDeclaration {
+         var judged = unjudged
+         let stored = storedFacts(with: inferrer, facts: facts)
+-        judged.unconditional = stored.unconditional ?? inheritedUnconditional(facts: facts)
++        judged.unconditional = stored.unconditional
+         judged.conditionalStoredDefault = stored.conditional
+         judged.initializers = initializers.map {
+             judge($0, runningStoredDefaults: stored.conditional, with: inferrer, facts: facts)

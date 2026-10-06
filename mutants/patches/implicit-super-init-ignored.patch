@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift b/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
+index 0379716..337d10e 100644
+--- a/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
+@@ -155,7 +155,7 @@ struct RawDeclaration {
+         var body: PurityRefutation?
+         if let block = declaration.body, let cause = inferrer.constructionRefutation(Syntax(block)) {
+             body = .refutingConstruction(type: qualifiedName, via: .initializer(display), cause: cause)
+-        } else if kind == .classOrActor, !delegates, !isConvenience, !Self.calls(declaration, on: .keyword(.super)) {
++        } else if false, kind == .classOrActor, !delegates, !isConvenience, !Self.calls(declaration, on: .keyword(.super)) {
+             // A designated initializer that does not call `super.init` calls `super.init()`.
+             let supers = facts.superclasses(of: unjudged).flatMap(\.candidates)
+             if let cause = facts.refutation(constructing: supers, call: .empty) {

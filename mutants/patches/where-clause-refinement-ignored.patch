@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift b/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
+index 0379716..f5215d8 100644
+--- a/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
+@@ -374,7 +374,7 @@ final class TypeShapeCollector: SyntaxVisitor {
+         // `protocol Fancy where Self: Seedable` refines Seedable as surely as `: Seedable` does.
+         for requirement in node.genericWhereClause?.requirements ?? [] {
+             guard case .conformanceRequirement(let conformance) = requirement.requirement,
+-                  conformance.leftType.trimmedDescription == "Self" else { continue }
++                  conformance.leftType.trimmedDescription == "Never" else { continue }
+             if let composition = conformance.rightType.as(CompositionTypeSyntax.self) {
+                 protocolParents[node.name.text, default: []] += Self.lastComponents(of: composition)
+             } else if let name = Self.components(of: conformance.rightType)?.last {

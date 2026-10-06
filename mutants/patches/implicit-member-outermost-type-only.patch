@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift b/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
+index 0379716..9b11683 100644
+--- a/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
+@@ -217,7 +217,7 @@ struct RawDeclaration {
+         guard let type else { return nil }
+         let members = implicitMembers(in: value)
+         guard !members.isEmpty else { return nil }
+-        for named in namedTypes(in: type) {
++        for named in namedTypes(in: type).prefix(1) {
+             guard let typeText = qualifyingText(of: named, facts: facts) else { continue }
+             for member in members {
+                 guard let expression = Parser.parse(source: typeText + member).statements.first?.item else { continue }
