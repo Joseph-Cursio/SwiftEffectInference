@@ -143,7 +143,7 @@
       "patch": "patches/superclass-not-inherited.patch",
       "shape": "construction-hole",
       "expected": "killed",
-      "test": "superclassPropagates",
+      "test": "subclassIsARefutedType",
       "label": "a subclass does not inherit its superclass's unconditional construction"
     },
     {
@@ -167,7 +167,7 @@
       "patch": "patches/local-types-become-members.patch",
       "shape": "construction-hole",
       "expected": "killed",
-      "test": "localTypeDoesNotShadowOtherMethods",
+      "test": "localTypeOutOfReach",
       "label": "a type declared inside a method is recorded as a member of the enclosing type and hides the real one from every other method"
     },
     {
@@ -191,7 +191,7 @@
       "patch": "patches/unseen-initializer-is-clean.patch",
       "shape": "construction-hole",
       "expected": "killed",
-      "test": "memberwiseShapes",
+      "test": "unseenInitializer",
       "label": "a call no known initializer accepts is judged clean — the IUO, lazy and protocol-initializer holes reopen"
     },
     {
@@ -199,7 +199,7 @@
       "patch": "patches/witness-not-frozen.patch",
       "shape": "construction-witness",
       "expected": "killed",
-      "test": "recursiveConstructionConverges",
+      "test": "witnessIsKept",
       "label": "witnesses are re-derived every pass — a recursive construction never converges and its witness nests one level deeper per pass"
     },
     {
@@ -271,7 +271,7 @@
       "patch": "patches/contextual-init-ignored.patch",
       "shape": "construction-hole",
       "expected": "killed",
-      "test": "contextualInitializerIsAttributed",
+      "test": "contextDecidesTheType",
       "label": "a base-less .init(…) is never typed by its context"
     },
     {

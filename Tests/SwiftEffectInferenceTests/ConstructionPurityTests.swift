@@ -442,4 +442,61 @@ extension ConstructionPurityTests {
         }
         #expect(inferrer.refutation(for: closure) != nil)
     }
+
+    // MARK: - The table itself
+
+    @Test("a subclass of a refuted class is a refuted type, through its superclass")
+    func subclassIsARefutedType() throws {
+        let facts = ConstructionFacts.build(from: [Parser.parse(source: """
+        class Base { let id = UUID() }
+        final class Sub: Base {}
+        """)])
+        #expect(facts.refutedTypeNames == ["Base", "Sub"])
+        let refutation = try #require(facts.refutation(constructing: "Sub"))
+        guard case .refutingConstruction("Sub", .superclass("Base"), _) = refutation else {
+            Issue.record("Sub was not refuted through Base: \(refutation)"); return
+        }
+    }
+
+    @Test("a witness, once found, is kept: a later pass does not replace it with a longer one")
+    func witnessIsKept() throws {
+        // The first pass finds `stamp`; the second also finds `inner`, which comes first.
+        let facts = ConstructionFacts.build(from: [Parser.parse(source: """
+        struct Inner { let id = UUID() }
+        struct Outer { let inner = Inner(); let stamp = Date() }
+        """)])
+        let refutation = try #require(facts.refutation(constructing: "Outer"))
+        guard case .refutingConstruction("Outer", .storedProperty("stamp"), _) = refutation else {
+            Issue.record("the witness was replaced: \(refutation)"); return
+        }
+    }
+
+    @Test("a call no known initializer accepts refutes if any way of constructing the type can")
+    func unseenInitializer() throws {
+        // A macro may generate `init(at:)`; what it runs is not in the table.
+        #expect(try judge("f", in: """
+        struct Event { var at: Date; init(now: Date = Date()) { at = now } }
+        func f() -> Event { Event(at: .distantPast) }
+        """).configured != nil)
+        // The control: a raw-value enum's synthesized init(rawValue:) runs nothing.
+        #expect(try judge("f", in: """
+        enum Mode: String { case fast; init(seed: Int = Int.random(in: 0...1)) { self = .fast } }
+        func f() -> Mode? { Mode(rawValue: "fast") }
+        """).configured == nil)
+    }
+
+    @Test("the context of a base-less .init decides its type")
+    func contextDecidesTheType() throws {
+        // Matched by shape, `.init(title:)` could be HealthRecommendation; the return type says not.
+        #expect(try judge("f", in: healthRecommendation + """
+
+        struct Clean { var title: String }
+        func f(_ t: String) -> Clean { .init(title: t) }
+        """).configured == nil)
+        // And an unlabelled `.init()`, which no shape could match, is typed by it.
+        #expect(try judge("f", in: """
+        struct Report { let id = UUID() }
+        func f() -> Report { .init() }
+        """).configured != nil)
+    }
 }
