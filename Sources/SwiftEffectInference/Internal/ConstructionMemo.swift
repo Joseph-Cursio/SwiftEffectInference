@@ -78,8 +78,10 @@ final class ConstructionMemo: @unchecked Sendable {
 
     // MARK: - Counted
 
-    /// How many declarations the decode search has stepped into, never reset — counted so that a
-    /// test can see a question answered once rather than infer it from a clock.
+    /// How many lookups have been resolved rather than read back, and how many declarations the
+    /// decode search has stepped into, never reset — counted so that a test can see a question
+    /// answered once rather than infer it from a clock.
+    private(set) var lookupsResolved = 0
     var decodeSteps = 0
 
     /// Forgets what was refuted: the next pass judges against fuller facts.
@@ -94,7 +96,9 @@ final class ConstructionMemo: @unchecked Sendable {
     /// Marks `key` as being resolved; `false` when it already is — the resolution has come back
     /// to a lookup it is inside of, with the same arguments, and would never end.
     func beginLookup(_ key: LookupKey) -> Bool {
-        resolving.insert(key).inserted
+        guard resolving.insert(key).inserted else { return false }
+        lookupsResolved += 1
+        return true
     }
 
     /// Ends `key`'s resolution with `found`.

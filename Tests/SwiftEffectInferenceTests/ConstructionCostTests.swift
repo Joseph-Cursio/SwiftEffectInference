@@ -214,6 +214,32 @@ struct ConstructionCostTests {
         #expect(try constructionRefuted("make", in: source))
     }
 
+    /// Every call in one body reads one answer for a spelling — and a body in another scope asks
+    /// its own question, with the same memo: `Item` is a different type in each enum.
+    @Test("a spelling is resolved once per scope, and each scope asks its own")
+    func spellingIsResolvedOncePerScope() throws {
+        let tree = Parser.parse(source: """
+        enum Minting { struct Item { let id = UUID() }; static func make() -> [Item] { [Item()] } }
+        enum Counting { struct Item { var n = 0 }; static func make() -> [Item] { [Item(), Item(), Item()] } }
+        """)
+        final class Bodies: SyntaxVisitor {
+            var found: [Syntax] = []
+            override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
+                if let body = node.body { found.append(Syntax(body)) }
+                return .skipChildren
+            }
+        }
+        let bodies = Bodies(viewMode: .sourceAccurate)
+        bodies.walk(tree)
+        let facts = ConstructionFacts.build(from: [tree]).memoised()
+        let memo = try #require(facts.memo.instance)
+
+        #expect(facts.refutation(constructingIn: bodies.found[0]) != nil)
+        let resolved = memo.lookupsResolved
+        #expect(facts.refutation(constructingIn: bodies.found[1]) == nil)
+        #expect(memo.lookupsResolved == resolved + 1, "\(memo.lookupsResolved - resolved) resolutions for one spelling")
+    }
+
     /// A lookup is kept per scope, not per site — so the key has to say where in that scope the
     /// site is. From a class's inheritance clause the class's own members are out of reach; from
     /// its body they are in. Here `Base` means the outer class in one and the nested struct in the
