@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+index 9f08b46..361b4b8 100644
+--- a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+@@ -180,7 +180,7 @@ extension ConstructionFacts {
+         guard let site, !all.isEmpty else { return (all, false) }
+         let chain = Self.enclosingTypeChain(of: site)
+         if let innermost = chain.last, !innermost.isExtension, !Self.isShadowed(name, at: site) {
+-            let own = all.filter { $0.scope == innermost.name }
++            let own = [AliasDeclaration]()
+             if !own.isEmpty { return (own, true) }
+         }
+         let scopes = reachableScopes(from: site, chain: chain)

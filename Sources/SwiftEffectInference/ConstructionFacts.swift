@@ -56,6 +56,10 @@ import SwiftSyntax
 ///   Otherwise every reachable declaration is a candidate, and any of them refuting refutes. A
 ///   head no reachable type names (a module, `SwiftUI.Section`) is dropped and the rest resolved.
 ///   `Self` means every subclass of a non-final class, and every conformer in a protocol extension.
+/// - **Typealiases.** By the same rule: the innermost declaration's own alias when it declares
+///   one, and it shadows every outer namesake. Otherwise every alias of that name in the package —
+///   and the name itself, which may be a framework type's — so a `typealias UUID = String` in one
+///   type never hides a `UUID` default in another. A target is read where its alias is written.
 /// - **Initializers.** A call no known initializer accepts reached one the table cannot see —
 ///   macro-generated, inherited from outside the package, or matched by a rule finer than this
 ///   one's. It refutes if anything constructing that type can.
@@ -82,8 +86,9 @@ public struct ConstructionFacts: Sendable, Equatable {
 
     var declarations: [ConstructionDeclaration] = []
     var indicesByBareName: [String: [Int]] = [:]
-    /// `typealias A = B.C` → `["B", "C"]`, by the alias's bare name.
-    var aliasTargets: [String: [[String]]] = [:]
+    /// Every `typealias A = B.C`, by the alias's bare name. A list, because each type may declare
+    /// its own `A`, and `#if` branches several.
+    var aliases: [String: [AliasDeclaration]] = [:]
     var protocolNames: Set<String> = []
     /// A protocol's own inheritance clause, by bare name, compositions spelled out.
     var protocolParents: [String: [String]] = [:]
@@ -121,15 +126,16 @@ public struct ConstructionFacts: Sendable, Equatable {
     /// do not name their type — `self.init`, `super.init` and `.init` — and `decode` the decodes.
     func mentions(_ token: String) -> Bool {
         token == "Self" || token == "init" || token == "decode" || token == "decodeIfPresent"
-            || indicesByBareName[token] != nil || aliasTargets[token] != nil
+            || indicesByBareName[token] != nil || aliases[token] != nil
     }
 
     // MARK: - Building
 
     /// Builds the table from every source in a package, to a fixpoint.
     ///
-    /// Pass sources in a **fixed** order. Which types are refuted does not depend on it; which
-    /// witness is reported first among several does.
+    /// Pass sources in a **fixed** order. Which types are refuted does not depend on it — wherever
+    /// a name, a typealias included, has several candidates, every one is consulted and none is
+    /// chosen by when it was collected — but which witness is reported first among several does.
     public static func build(from sources: [SourceFileSyntax]) -> ConstructionFacts {
         let collector = TypeShapeCollector(viewMode: .sourceAccurate)
         for source in sources { collector.walk(source) }
@@ -168,7 +174,7 @@ public struct ConstructionFacts: Sendable, Equatable {
             protocolNames: collector.protocolNames,
             protocolParents: collector.protocolParents
         )
-        aliasTargets = collector.aliasTargets
+        aliases = collector.aliases
         memberTypes = collector.memberTypes
     }
 

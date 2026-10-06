@@ -18,23 +18,26 @@ extension ConstructionFacts {
         if head == "Self" { return selfDeclarations(components, from: site) }
         guard let bareName = components.last, !bareName.isEmpty else { return [] }
         let written = components.joined(separator: ".")
+        let meant = aliasesSeen.contains(head) ? (candidates: [], isCertain: false) : aliases(named: head, from: site)
 
-        var found: [Int]
+        var found: [Int] = []
         if let site {
             let chain = Self.enclosingTypeChain(of: site)
             // Certain only in the innermost declaration, and only when nothing at the site can
             // shadow the head: there no extension context and no superclass member stands between.
             if let innermost = chain.last, !innermost.isExtension, !Self.isShadowed(head, at: site) {
-                let certain = indices(bareName).filter {
+                found = indices(bareName).filter {
                     declarations[$0].qualifiedName == innermost.name + "." + written
                 }
-                if !certain.isEmpty { return certain }
+                if !found.isEmpty, !meant.isCertain { return found }
             }
-            found = []
-            for scope in reachableScopes(from: site, chain: chain) {
-                let qualified = scope.isEmpty ? written : scope + "." + written
-                found += indices(bareName).filter {
-                    declarations[$0].qualifiedName == qualified && !found.contains($0)
+            // An alias the innermost declaration declares shadows every outer namesake.
+            if !meant.isCertain {
+                for scope in reachableScopes(from: site, chain: chain) {
+                    let qualified = scope.isEmpty ? written : scope + "." + written
+                    found += indices(bareName).filter {
+                        declarations[$0].qualifiedName == qualified && !found.contains($0)
+                    }
                 }
             }
         } else {
@@ -43,15 +46,13 @@ extension ConstructionFacts {
             }
         }
 
-        // A typealias heading the spelling: what it stands for.
-        if !aliasesSeen.contains(head) {
-            for target in aliasTargets[head] ?? [] {
-                let expanded = target + components.dropFirst()
-                found += declarations(
-                    named: expanded, from: nil, depth: depth + 1, aliasesSeen: aliasesSeen.union([head])
-                )
-                    .filter { !found.contains($0) }
-            }
+        // A typealias heading the spelling: what it stands for, read where the alias is written.
+        for alias in meant.candidates {
+            let expanded = alias.target + components.dropFirst()
+            found += declarations(
+                named: expanded, from: alias.site, depth: depth + 1, aliasesSeen: aliasesSeen.union([head])
+            )
+                .filter { !found.contains($0) }
         }
         // A head nothing reachable names — a module, or a type this table does not record.
         if found.isEmpty, components.count > 1 {
@@ -167,6 +168,47 @@ extension ConstructionFacts {
         return nil
     }
 
+    // MARK: - Typealiases
+
+    /// The typealiases `name` written at `site` can mean, the lexically nearest first. Certain —
+    /// the aliases the innermost enclosing *declaration* (not an extension) declares, and nothing
+    /// else — under the rule that makes a type name certain; otherwise every alias of that name,
+    /// wherever it is declared, since which one Swift picks can turn on a conformance, a
+    /// superclass or a module. Collection order never decides. With no `site`, every alias.
+    func aliases(named name: String, from site: Syntax?) -> (candidates: [AliasDeclaration], isCertain: Bool) {
+        let all = aliases[name] ?? []
+        guard let site, !all.isEmpty else { return (all, false) }
+        let chain = Self.enclosingTypeChain(of: site)
+        if let innermost = chain.last, !innermost.isExtension, !Self.isShadowed(name, at: site) {
+            let own = all.filter { $0.scope == innermost.name }
+            if !own.isEmpty { return (own, true) }
+        }
+        let scopes = reachableScopes(from: site, chain: chain)
+        let rank = { (alias: AliasDeclaration) in scopes.firstIndex(of: alias.scope) ?? scopes.count }
+        let nearestFirst = all.enumerated().sorted { lhs, rhs in
+            (rank(lhs.element), lhs.offset) < (rank(rhs.element), rhs.offset)
+        }
+        return (nearestFirst.map(\.element), false)
+    }
+
+    /// Every spelling `components` written at `site` may stand for once typealiases are followed:
+    /// each target of each alias its head can mean, read where that alias is written and followed
+    /// in turn — and the spelling itself, unless an alias certainly binds its head. An alias
+    /// declared in one type never takes the name from another, where it may mean a framework type.
+    func spellings(of components: [String], from site: Syntax?, aliasesSeen: Set<String> = []) -> [[String]] {
+        guard let head = components.first, !aliasesSeen.contains(head) else { return [components] }
+        let meant = aliases(named: head, from: site)
+        var result = meant.isCertain ? [] : [components]
+        for alias in meant.candidates {
+            let expanded = alias.target + components.dropFirst()
+            for spelling in spellings(of: expanded, from: alias.site, aliasesSeen: aliasesSeen.union([head]))
+            where !result.contains(spelling) {
+                result.append(spelling)
+            }
+        }
+        return result
+    }
+
     // MARK: - Self and supertypes
 
     /// What `Self` can be where `site` is written: the enclosing type (through a typealias, and as
@@ -177,7 +219,7 @@ extension ConstructionFacts {
         let bare = innermost.name.split(separator: ".").last.map(String.init) ?? innermost.name
         var selves = indices(bare).filter { declarations[$0].qualifiedName == innermost.name }
         if selves.isEmpty {
-            selves = (aliasTargets[bare] ?? []).flatMap { declarations(named: $0, from: nil) }
+            selves = (aliases[bare] ?? []).flatMap { declarations(named: $0.target, from: $0.site) }
         }
         if selves.isEmpty, !protocolNames.contains(bare) { selves = indices(bare) }
         if protocolNames.contains(bare) {
@@ -335,8 +377,9 @@ extension ConstructionFacts {
         guard visited.insert(index).inserted else { return nil }
         let declaration = declarations[index]
         if let own = declaration.unconditional ?? declaration.conditionalStoredDefault { return own }
-        let decoder = declaration.initializers.first { $0.parameters.map(\.label) == ["from"] }
-        if let body = decoder?.bodyRefutation {
+        // Every one: `#if` branches may each declare their own.
+        let decoders = declaration.initializers.filter { $0.parameters.map(\.label) == ["from"] }
+        if let body = decoders.lazy.compactMap(\.bodyRefutation).first {
             return body
         }
         if declaration.kind == .classOrActor {

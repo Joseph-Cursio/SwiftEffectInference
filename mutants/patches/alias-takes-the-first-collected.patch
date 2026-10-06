@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+index 9f08b46..677bbc5 100644
+--- a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+@@ -176,7 +176,7 @@ extension ConstructionFacts {
+     /// wherever it is declared, since which one Swift picks can turn on a conformance, a
+     /// superclass or a module. Collection order never decides. With no `site`, every alias.
+     func aliases(named name: String, from site: Syntax?) -> (candidates: [AliasDeclaration], isCertain: Bool) {
+-        let all = aliases[name] ?? []
++        let all = (aliases[name]?.first).map { [$0] } ?? []
+         guard let site, !all.isEmpty else { return (all, false) }
+         let chain = Self.enclosingTypeChain(of: site)
+         if let innermost = chain.last, !innermost.isExtension, !Self.isShadowed(name, at: site) {

@@ -7,6 +7,18 @@ struct MemberType: Sendable, Equatable {
     let type: TypeSyntax
 }
 
+/// A `typealias` of a type spelling, with where it is declared — so that a name resolves to the
+/// alias Swift would pick there, and not to whichever namesake was collected first.
+struct AliasDeclaration: Sendable, Equatable {
+    /// The qualified name of the type the alias is a member of, as `enclosingTypeChain(of:)` spells
+    /// it, with `.<local>` appended inside a function body; empty at the top level.
+    let scope: String
+    /// `typealias A = B.C` → `["B", "C"]`.
+    let target: [String]
+    /// The target as written — where its own names resolve.
+    let site: Syntax
+}
+
 /// What kind of type a declaration is, as far as constructing it goes.
 enum ConstructionKind: Sendable, Equatable {
     case structure

@@ -1,5 +1,5 @@
 diff --git a/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift b/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
-index 0379716..420c99e 100644
+index 1477ac8..532485a 100644
 --- a/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
 +++ b/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
 @@ -215,7 +215,7 @@ struct RawDeclaration {
@@ -10,4 +10,4 @@ index 0379716..420c99e 100644
 +        let members: [String] = []
          guard !members.isEmpty else { return nil }
          for named in namedTypes(in: type) {
-             guard let typeText = qualifyingText(of: named, facts: facts) else { continue }
+             for typeText in qualifyingTexts(of: named, facts: facts) {

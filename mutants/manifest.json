@@ -315,6 +315,30 @@
       "label": "a designated initializer without super.init is not followed to the implicit super.init()"
     },
     {
+      "id": "alias-takes-the-first-collected",
+      "patch": "patches/alias-takes-the-first-collected.patch",
+      "shape": "construction-hole",
+      "expected": "killed",
+      "test": "nestedAliasNamesakes",
+      "label": "a name follows only the first typealias of it collected — which types refute turns on source order, and B's `typealias Stamp = UUID` default goes unseen behind A's `Stamp = String`"
+    },
+    {
+      "id": "alias-hides-the-written-name",
+      "patch": "patches/alias-hides-the-written-name.patch",
+      "shape": "construction-hole",
+      "expected": "killed",
+      "test": "aliasDoesNotHijackAFrameworkName",
+      "label": "an alias the site does not settle replaces the written name — a `typealias UUID = String` in one type hides a real `UUID` default in another"
+    },
+    {
+      "id": "alias-scope-ignored",
+      "patch": "patches/alias-scope-ignored.patch",
+      "shape": "construction-control",
+      "expected": "killed",
+      "test": "constructionThroughNestedAlias",
+      "label": "an alias its own type declares is never certain — A's `Item()` is charged for B's `typealias Item = Minted`"
+    },
+    {
       "id": "marker-scan-reads-string-text",
       "patch": "patches/marker-scan-reads-string-text.patch",
       "shape": "purity-inference",
