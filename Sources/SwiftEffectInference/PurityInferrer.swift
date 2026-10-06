@@ -532,10 +532,10 @@ public struct PurityInferrer: Sendable {
         let consultsConstruction = !constructionFacts.isEmpty
         var mentionsConstructible = false
         for token in syntax.tokens(viewMode: .sourceAccurate) {
-            if Self.sideEffectMarkers.contains(token.text) {
+            if Self.sideEffectMarkers.contains(token.text), Self.isMarkerPosition(token) {
                 return .sideEffectMarker(token.text)
             }
-            if Self.nondeterministicMarkers.contains(token.text) {
+            if Self.nondeterministicMarkers.contains(token.text), Self.isMarkerPosition(token) {
                 return .nondeterministicMarker(token.text)
             }
             // A pre-filter, never a match: the fourth pass below matches only constructions.
@@ -551,6 +551,24 @@ public struct PurityInferrer: Sendable {
         if let source = checker.source { return .nondeterminismSource(source) }
         guard mentionsConstructible else { return nil }
         return constructionFacts.refutation(constructingIn: syntax)
+    }
+
+    /// Whether `token` is where a marker can be: an identifier, and not a key path's component.
+    ///
+    /// The text of a string literal is not code: `"Date"` and `@AppStorage("shuffled")` name
+    /// nothing. A key path's component names a property, read when the key path is applied —
+    /// `rows.map(\.random)` reads each row's own `random` — and **no marker is a property**: each
+    /// names a type, a free function, a method or an argument label, none of which a key path can
+    /// name. A marker that is a property would have to be matched here too. The root is still
+    /// read: `\Date.timeIntervalSince1970` mentions `Date`. A member name is still matched,
+    /// `rows.map { $0.random }` included, because a member can be a static method: `Int.random`.
+    static func isMarkerPosition(_ token: TokenSyntax) -> Bool {
+        guard case .identifier = token.tokenKind else { return false }
+        if let reference = token.parent?.as(DeclReferenceExprSyntax.self),
+           reference.parent?.is(KeyPathPropertyComponentSyntax.self) == true {
+            return false
+        }
+        return true
     }
 
     /// What constructing a type runs, judged on the **transparency half only** — markers, the

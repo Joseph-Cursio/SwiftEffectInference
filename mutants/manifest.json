@@ -313,6 +313,22 @@
       "expected": "killed",
       "test": "implicitSuperInitializer",
       "label": "a designated initializer without super.init is not followed to the implicit super.init()"
+    },
+    {
+      "id": "marker-scan-reads-string-text",
+      "patch": "patches/marker-scan-reads-string-text.patch",
+      "shape": "purity-inference",
+      "expected": "killed",
+      "test": "stringLiteralText",
+      "label": "the marker scan reads a string literal's text as code — \"Date\" refutes a function returning a column title"
+    },
+    {
+      "id": "marker-scan-reads-key-path-components",
+      "patch": "patches/marker-scan-reads-key-path-components.patch",
+      "shape": "purity-inference",
+      "expected": "killed",
+      "test": "keyPathComponent",
+      "label": "a key path's component is read as a marker — rows.map(\\.random) refutes"
     }
   ]
 }
