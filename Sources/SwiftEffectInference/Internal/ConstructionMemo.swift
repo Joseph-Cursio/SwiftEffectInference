@@ -33,16 +33,30 @@ import SwiftSyntax
 /// ## Threads
 ///
 /// A memo is never shared between threads. `build(from:)` attaches one for its own passes and
-/// detaches it before returning, and a walk over a body outside a build makes its own
-/// (`ConstructionFacts.memoised()`), which is the only place that walk's answers are kept.
+/// detaches it before returning — handing on only what names mean, as an immutable `Settled` —
+/// and a walk over a body outside a build makes its own (`ConstructionFacts.memoised()`), which
+/// is the only place that walk's answers are kept.
 final class ConstructionMemo: @unchecked Sendable {
 
     /// Held by `ConstructionFacts`, and invisible to its equality: two tables that say the same
     /// thing are equal whatever either has cached.
     struct Slot: Sendable, Equatable {
         var instance: ConstructionMemo?
+        /// What the build resolved, handed on with the table it returns.
+        var settled = Settled()
         static func == (lhs: Slot, rhs: Slot) -> Bool { true }
     }
+
+    /// The build's answers about names, kept on the table it returns: a name means after the build
+    /// what it meant during it, so whoever judges with the table reads them instead of resolving
+    /// afresh. Immutable — read from any thread without a lock.
+    struct Settled: Sendable {
+        var lookups: [LookupKey: [Int]] = [:]
+        var decodeEdges: [Int: [DecodeEdge]] = [:]
+    }
+
+    /// What this memo resolved, to hand on.
+    var settled: Settled { Settled(lookups: lookups, decodeEdges: decodeEdges) }
 
     // MARK: - For the whole build
 
@@ -101,7 +115,7 @@ final class ConstructionMemo: @unchecked Sendable {
 /// statement list around it. Nothing else. So two sites below the same innermost such node
 /// resolve every spelling alike, and that node, with whether the site *is* it (the chain starts
 /// above the site, shadowing at it), is the key.
-struct LookupKey: Hashable {
+struct LookupKey: Hashable, Sendable {
     let components: [String]
     let scope: Syntax?
     let siteIsScope: Bool
@@ -133,7 +147,7 @@ struct LookupKey: Hashable {
 }
 
 /// One way decoding a declaration reaches another: through its superclass, or a stored property.
-struct DecodeEdge {
+struct DecodeEdge: Sendable {
     let step: PurityRefutation.ConstructionStep
     let held: Int
 }

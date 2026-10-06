@@ -195,6 +195,25 @@ struct ConstructionCostTests {
         #expect(try constructionRefuted("make", in: loop, elsewhere))
     }
 
+    /// The table a build returns may be shared between threads, so it carries nothing that a
+    /// judgement writes to — only what names were found to mean, which no judgement changes and
+    /// every judgement may read. And it is equal to a table that resolved nothing.
+    @Test("the built table hands on what names mean, and nothing a judgement writes to")
+    func builtTableHandsOnOnlyWhatNamesMean() throws {
+        let source = """
+        struct Stamp { let id = UUID() }
+        struct Holder { let stamp = Stamp() }
+        func make() -> Holder { Holder() }
+        """
+        let facts = ConstructionFacts.build(from: [Parser.parse(source: source)])
+        #expect(facts.memo.instance == nil)
+        #expect(!facts.memo.settled.lookups.isEmpty)
+        var forgetful = facts
+        forgetful.memo = .init()
+        #expect(forgetful == facts)
+        #expect(try constructionRefuted("make", in: source))
+    }
+
     /// A lookup is kept per scope, not per site — so the key has to say where in that scope the
     /// site is. From a class's inheritance clause the class's own members are out of reach; from
     /// its body they are in. Here `Base` means the outer class in one and the nested struct in the

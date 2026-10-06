@@ -170,8 +170,9 @@ public struct ConstructionFacts: Sendable, Equatable {
             refuted = nowRefuted
             pass += 1
         }
-        // The table leaves the build without it: a consumer may share the table between threads.
-        facts.memo.instance = nil
+        // The table leaves the build without it — a consumer may share the table between threads —
+        // but with what names were found to mean, which no pass changes.
+        facts.memo = .init(instance: nil, settled: memo.settled)
         return facts
     }
 

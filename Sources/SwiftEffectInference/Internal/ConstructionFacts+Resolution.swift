@@ -24,6 +24,8 @@ extension ConstructionFacts {
             return memoised().declarations(named: components, from: site, depth: depth, aliasesSeen: aliasesSeen)
         }
         let key = LookupKey(components: components, site: site, depth: depth, aliasesSeen: aliasesSeen)
+        let settled = self.memo.settled.lookups
+        if !settled.isEmpty, let known = settled[key] { return known }
         if let known = memo.lookups[key] { return known }
         guard memo.beginLookup(key) else { return [] }
         let found = resolve(components, from: site, depth: depth, aliasesSeen: aliasesSeen)
@@ -467,7 +469,7 @@ extension ConstructionFacts {
     /// searched: its superclasses, then each stored property's types, by property name. Read from
     /// names and stored-property types alone, so kept for the whole build.
     private func decodeEdges(of index: Int, memo: ConstructionMemo) -> [DecodeEdge] {
-        if let known = memo.decodeEdges[index] { return known }
+        if let known = self.memo.settled.decodeEdges[index] ?? memo.decodeEdges[index] { return known }
         let declaration = declarations[index]
         var edges: [DecodeEdge] = []
         if declaration.kind == .classOrActor {
