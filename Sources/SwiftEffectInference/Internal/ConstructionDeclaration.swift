@@ -135,6 +135,8 @@ struct ConstructionDeclaration: Sendable, Equatable {
     /// extension's with the same labels, so that one is set aside.
     func accepting(_ call: CallShape) -> [ConstructionInitializer] {
         let fitting = initializers.filter { call.reaches($0.parameters) }
+        // The shape guess asks this of every type: with nothing to set aside, build no set.
+        guard fitting.contains(where: { $0.origin == .protocolExtension }) else { return fitting }
         let own = fitting.filter { $0.origin != .protocolExtension }
         let ownLabels = Set(own.map { $0.parameters.map(\.label) })
         return own + fitting.filter {
@@ -185,7 +187,7 @@ struct ConstructionDeclaration: Sendable, Equatable {
 }
 
 /// The arguments a construction call writes, split the way Swift binds them.
-struct CallShape: Equatable {
+struct CallShape: Hashable {
     /// The labels of the parenthesized arguments, `_` for an unlabelled one.
     let ordinary: [String]
     /// The trailing closures: `_` for the first, then the labels of any more.

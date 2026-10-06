@@ -359,7 +359,20 @@ extension ConstructionFacts {
     /// Whether `call` could be a construction of the declaration at `index`: one of its own
     /// initializers fits, or it inherits one that may — from a superclass in the package, or from
     /// one outside it, which could take anything.
+    ///
+    /// Answered once per declaration and depth for a call shape: with a namesake at every level,
+    /// the paths up the superclasses double at each one, and the declarations on them do not.
+    /// The depth bound is what ends a cycle of superclasses, so it is part of the question.
     private func mayFit(_ call: CallShape, _ index: Int, depth: Int = 0) -> Bool {
+        guard let memo = memo.instance else { return memoised().mayFit(call, index, depth: depth) }
+        let key = FitKey(call: call, index: index, depth: depth)
+        if let known = memo.fits[key] { return known }
+        let fits = fitsUnmemoised(call, index, depth: depth)
+        memo.fits[key] = fits
+        return fits
+    }
+
+    private func fitsUnmemoised(_ call: CallShape, _ index: Int, depth: Int) -> Bool {
         let declaration = declarations[index]
         if !declaration.accepting(call).isEmpty { return true }
         guard declaration.inheritsDesignatedInitializers, depth < 8 else { return false }
@@ -370,7 +383,20 @@ extension ConstructionFacts {
 
     /// What `T.init` — or `T.init(label:…)`, when `labels` is given — runs called as a function
     /// value, following the initializers a class inherits.
+    ///
+    /// Answered once per declaration and depth, for the reason `mayFit` is.
     func referenceRefutation(_ index: Int, labels: [String]?, depth: Int = 0) -> PurityRefutation? {
+        guard let memo = memo.instance else {
+            return memoised().referenceRefutation(index, labels: labels, depth: depth)
+        }
+        let key = ReferenceKey(index: index, labels: labels, depth: depth)
+        if let known = memo.references[key] { return known }
+        let found = referenceUnmemoised(index, labels: labels, depth: depth)
+        memo.references.updateValue(found, forKey: key)
+        return found
+    }
+
+    private func referenceUnmemoised(_ index: Int, labels: [String]?, depth: Int) -> PurityRefutation? {
         let declaration = declarations[index]
         if let unconditional = declaration.unconditional { return unconditional }
         let matching = declaration.initializers.filter { labels == nil || $0.parameters.map(\.label) == labels }

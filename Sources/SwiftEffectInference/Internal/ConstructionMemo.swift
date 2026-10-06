@@ -8,7 +8,9 @@ import SwiftSyntax
 /// Every answer here is a function of the facts it was asked of, and the same questions came back
 /// constantly. Each decode site re-walked the member-type graph, resolving every stored property's
 /// type afresh at every step, on every pass. A protocol extension's initializer was walked once per
-/// conformer, and its `self.init` resolved to every conformer each time. Building
+/// conformer, and its `self.init` resolved to every conformer each time. Whether a class could
+/// take a contextless `.init(label:)` — or what `T.init` runs as a function value — was found by
+/// trying every path up its superclasses: with a namesake at every level, 2⁸ per class. Building
 /// over swift-nio, swift-argument-parser, swift-algorithms and swift-syntax side by side took
 /// 2.1 s against 0.4 s for the four one by one; adding swift-collections, it never finished (see
 /// `declarations(named:from:)` on the loop through `Self`).
@@ -20,8 +22,9 @@ import SwiftSyntax
 ///   pass changes. So lookups (`declarations(named:from:)`) and the edges of the decode graph are
 ///   kept across passes.
 /// - **For one pass: what is refuted.** Each pass judges against fixed declarations and fills
-///   slots for the next, so what a body constructs and what a decode runs are kept only until the
-///   pass ends (`startPass()`).
+///   slots for the next, so what a body constructs, what a decode runs, whether a class can take a
+///   call shape and what a reference to an initializer runs are kept only until the pass ends
+///   (`startPass()`).
 ///
 /// A lookup is keyed by where its answer can differ, not by the node it was asked from: the
 /// innermost enclosing node the resolution reads (`LookupKey`), so every call in one body shares
@@ -56,6 +59,8 @@ final class ConstructionMemo: @unchecked Sendable {
     var decodes: [Int: PurityRefutation?] = [:]
     /// Declarations whose decoding reaches no refutation at all, by any path.
     var undecodable: Set<Int> = []
+    var fits: [FitKey: Bool] = [:]
+    var references: [ReferenceKey: PurityRefutation?] = [:]
 
     // MARK: - Counted
 
@@ -68,6 +73,8 @@ final class ConstructionMemo: @unchecked Sendable {
         walks = [:]
         decodes = [:]
         undecodable = []
+        fits = [:]
+        references = [:]
     }
 
     /// Marks `key` as being resolved; `false` when it already is — the resolution has come back
@@ -129,4 +136,19 @@ struct LookupKey: Hashable {
 struct DecodeEdge {
     let step: PurityRefutation.ConstructionStep
     let held: Int
+}
+
+/// Whether the declaration at `index` can take `call`, asked `depth` superclasses up.
+struct FitKey: Hashable {
+    let call: CallShape
+    let index: Int
+    let depth: Int
+}
+
+/// What `T.init(labels…)` as a function value runs, asked of the declaration at `index`, `depth`
+/// superclasses up.
+struct ReferenceKey: Hashable {
+    let index: Int
+    let labels: [String]?
+    let depth: Int
 }

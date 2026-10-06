@@ -112,6 +112,66 @@ struct ConstructionCostTests {
         #expect(memo.decodeSteps == steps, "asked again, \(memo.decodeSteps - steps) more steps")
     }
 
+    /// `C0` to `C20`, each subclassing the one before, declared alike in each of `copies` modules —
+    /// so every class's superclass is every one of its namesakes a level down.
+    static func namesakeChains(copies: Int, root: String) -> [String] {
+        var chain = [root]
+        for level in 1...20 { chain.append("class C\(level): C\(level - 1) {}") }
+        return Array(repeating: chain.joined(separator: "\n"), count: copies)
+    }
+
+    /// Asking whether a contextless `.init(name:)` could build a class climbed every path up from
+    /// it: 5⁸ of them here — over a minute — before the answer was kept per class, depth and call
+    /// shape. A namesake in a *nested* scope does not do this: a lookup from the outer scope never
+    /// sees it, so the paths do not double.
+    @Test("a shape guess asks each class once, however many paths lead up from it", .timeLimit(.minutes(1)))
+    func shapeGuessUpNamesakeChains() throws {
+        var sources = Self.namesakeChains(
+            copies: 5, root: "class C0 { let name: String; init(name: String) { self.name = name } }"
+        )
+        sources.append("""
+        final class Deep: C12 { let id = UUID() }
+        final class Session: C3 { let id = UUID() }
+        func use(_ x: Any) {}
+        func make(_ x: String) { use(.init(name: x)) }
+        """)
+
+        let start = ContinuousClock.now
+        let refutation = try constructionRefutation(of: "make", in: sources)
+        let elapsed = ContinuousClock.now - start
+
+        // `Deep` inherits `init(name:)` from thirteen classes up: past the eight the guess climbs,
+        // so it is not taken to fit. `Session`, three up, is.
+        #expect(Self.path(refutation) == ["Session.id", "references the nondeterminism marker `UUID`"])
+        #expect(elapsed < Self.budget, "judged in \(elapsed)")
+    }
+
+    /// `T.init(name:)` as a function value climbed the superclasses the same way — from the
+    /// referenced type only, so it takes seven modules, and 7⁸ paths, to cost a minute.
+    @Test("a reference to an initializer asks each class once, however many paths lead up", .timeLimit(.minutes(1)))
+    func referenceUpNamesakeChains() throws {
+        var sources = Self.namesakeChains(
+            copies: 7, root: "class C0 { let name: String; init(name: String) { self.name = name; _ = UUID() } }"
+        )
+        sources.append("""
+        func near(_ names: [String]) -> [C5] { names.map(C5.init(name:)) }
+        func far(_ names: [String]) -> [C20] { names.map(C20.init(name:)) }
+        """)
+
+        let start = ContinuousClock.now
+        let near = try constructionRefutation(of: "near", in: sources)
+        let far = try constructionRefutation(of: "far", in: sources)
+        let elapsed = ContinuousClock.now - start
+
+        #expect(Self.path(near) == [
+            "C5: C4", "C4: C3", "C3: C2", "C2: C1", "C1: C0", "C0 init(name:)",
+            "references the nondeterminism marker `UUID`"
+        ])
+        // Twenty classes up is past the eight a reference climbs.
+        #expect(far == nil)
+        #expect(elapsed < Self.budget, "judged in \(elapsed)")
+    }
+
     /// swift-collections' `OrderedDictionary.Elements.SubSequence` declares `typealias SubSequence =
     /// Self`. `SubSequence.Index`, read through it, is `Outer.SubSequence.Index`; with no such type,
     /// the module-like head is dropped — and that is `SubSequence.Index` again, with the depth
