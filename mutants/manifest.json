@@ -353,6 +353,110 @@
       "expected": "killed",
       "test": "keyPathComponent",
       "label": "a key path's component is read as a marker — rows.map(\\.random) refutes"
+    },
+    {
+      "id": "lookup-loop-not-cut",
+      "patch": "patches/lookup-loop-not-cut.patch",
+      "shape": "construction-memo",
+      "expected": "killed",
+      "test": "lookupThatComesBackToItselfEnds",
+      "label": "a lookup re-entered with the same arguments is resolved again — `typealias SubSequence = Self` in a nested `SubSequence` and a spelling of `SubSequence.Index` recurse until the stack runs out"
+    },
+    {
+      "id": "lookup-asked-afresh",
+      "patch": "patches/lookup-asked-afresh.patch",
+      "shape": "construction-memo",
+      "expected": "killed",
+      "test": "spellingIsResolvedOncePerScope",
+      "label": "a kept lookup is never read back — every call in a body resolves its spelling from scratch, through every alias and namesake, on every pass"
+    },
+    {
+      "id": "lookup-key-forgets-the-scope",
+      "patch": "patches/lookup-key-forgets-the-scope.patch",
+      "shape": "construction-control",
+      "expected": "killed",
+      "test": "spellingIsResolvedOncePerScope",
+      "label": "a lookup is kept by spelling alone — Counting's `Item()` reads the answer Minting's was given, and is charged for Minting's identity"
+    },
+    {
+      "id": "lookup-key-forgets-where-the-site-is",
+      "patch": "patches/lookup-key-forgets-where-the-site-is.patch",
+      "shape": "construction-hole",
+      "expected": "killed",
+      "test": "inheritanceClauseAndBodyAreDifferentLookups",
+      "label": "a lookup from a class's inheritance clause and one from its body share an answer — the body's `Base()` reads the clause's outer `Base`, and the nested one that mints an identity goes unseen"
+    },
+    {
+      "id": "walk-outlives-its-pass",
+      "patch": "patches/walk-outlives-its-pass.patch",
+      "shape": "construction-hole",
+      "expected": "killed",
+      "test": "longDelegationChain",
+      "label": "what a body constructs is kept across passes — a body judged clean before the type it delegates to was refuted stays clean"
+    },
+    {
+      "id": "decode-answer-outlives-its-pass",
+      "patch": "patches/decode-answer-outlives-its-pass.patch",
+      "shape": "construction-hole",
+      "expected": "killed",
+      "test": "decodeAnswerFollowsThePass",
+      "label": "a decode's answer is kept across passes — C's initializer decodes a B whose init(from:) is known to refute only from the second pass, and is never charged"
+    },
+    {
+      "id": "decode-proof-trusts-a-skip",
+      "patch": "patches/decode-proof-trusts-a-skip.patch",
+      "shape": "construction-hole",
+      "expected": "killed",
+      "test": "decodeThroughACycle",
+      "label": "a decode search that skipped a type still being searched is taken to prove it reaches nothing — B, whose one way to the stamp is back through A, is never searched again"
+    },
+    {
+      "id": "decode-asked-afresh",
+      "patch": "patches/decode-asked-afresh.patch",
+      "shape": "construction-memo",
+      "expected": "killed",
+      "test": "decodeIsSearchedOncePerType",
+      "label": "a decode's kept answer is never read back — every site searches the member-type graph again"
+    },
+    {
+      "id": "decode-proof-ignored",
+      "patch": "patches/decode-proof-ignored.patch",
+      "shape": "construction-memo",
+      "expected": "killed",
+      "test": "decodeIsSearchedOncePerType",
+      "label": "a type proved to reach nothing is searched again from every type that reaches it"
+    },
+    {
+      "id": "fit-asked-afresh",
+      "patch": "patches/fit-asked-afresh.patch",
+      "shape": "construction-memo",
+      "expected": "killed",
+      "test": "shapeGuessUpNamesakeChains",
+      "label": "whether a class fits a contextless `.init(name:)` is worked out afresh on every path up its superclasses — 5^8 paths per class on five namesake chains, over a minute"
+    },
+    {
+      "id": "fit-forgets-the-depth",
+      "patch": "patches/fit-forgets-the-depth.patch",
+      "shape": "construction-control",
+      "expected": "killed",
+      "test": "shapeGuessUpNamesakeChains",
+      "label": "a kept fit is read back at any depth — a class thirteen superclasses below the initializer is taken to fit because a namesake did, nearer"
+    },
+    {
+      "id": "reference-asked-afresh",
+      "patch": "patches/reference-asked-afresh.patch",
+      "shape": "construction-memo",
+      "expected": "killed",
+      "test": "referenceUpNamesakeChains",
+      "label": "what `T.init(name:)` as a function value runs is worked out afresh on every path up the superclasses — 7^8 paths on seven namesake chains, two minutes"
+    },
+    {
+      "id": "built-table-keeps-its-memo",
+      "patch": "patches/built-table-keeps-its-memo.patch",
+      "shape": "construction-memo",
+      "expected": "killed",
+      "test": "builtTableHandsOnOnlyWhatNamesMean",
+      "label": "the table a build returns keeps the build's mutable memo — a consumer that shares the table between threads writes to it from each"
     }
   ]
 }

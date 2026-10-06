@@ -8,12 +8,32 @@ extension ConstructionFacts {
 
     /// The declarations `components` (as written, `["Outer", "Inner"]`) could name from `site`,
     /// the lexically preferred first. With no `site`, every declaration the spelling could mean.
+    ///
+    /// Asked once per scope: the answer is kept in the memo for every site that reads the same
+    /// scope (`LookupKey`). A resolution that comes back to itself with the same arguments —
+    /// through `Self`, whose expansion starts the depth bound and the aliases seen afresh, as
+    /// `typealias SubSequence = Self` in a nested type and a spelling of `SubSequence.Index` do —
+    /// would never end; that inner lookup names nothing, and the rest of the answer stands.
     func declarations(
         named components: [String],
         from site: Syntax?,
         depth: Int = 0,
         aliasesSeen: Set<String> = []
     ) -> [Int] {
+        guard let memo = memo.instance else {
+            return memoised().declarations(named: components, from: site, depth: depth, aliasesSeen: aliasesSeen)
+        }
+        let key = LookupKey(components: components, site: site, depth: depth, aliasesSeen: aliasesSeen)
+        let settled = self.memo.settled.lookups
+        if !settled.isEmpty, let known = settled[key] { return known }
+        if let known = memo.lookups[key] { return known }
+        guard memo.beginLookup(key) else { return [] }
+        let found = resolve(components, from: site, depth: depth, aliasesSeen: aliasesSeen)
+        memo.endLookup(key, found: found)
+        return found
+    }
+
+    private func resolve(_ components: [String], from site: Syntax?, depth: Int, aliasesSeen: Set<String>) -> [Int] {
         guard let head = components.first, !head.isEmpty, depth < 6 else { return [] }
         if head == "Self" { return selfDeclarations(components, from: site) }
         guard let bareName = components.last, !bareName.isEmpty else { return [] }
@@ -341,7 +361,20 @@ extension ConstructionFacts {
     /// Whether `call` could be a construction of the declaration at `index`: one of its own
     /// initializers fits, or it inherits one that may — from a superclass in the package, or from
     /// one outside it, which could take anything.
+    ///
+    /// Answered once per declaration and depth for a call shape: with a namesake at every level,
+    /// the paths up the superclasses double at each one, and the declarations on them do not.
+    /// The depth bound is what ends a cycle of superclasses, so it is part of the question.
     private func mayFit(_ call: CallShape, _ index: Int, depth: Int = 0) -> Bool {
+        guard let memo = memo.instance else { return memoised().mayFit(call, index, depth: depth) }
+        let key = FitKey(call: call, index: index, depth: depth)
+        if let known = memo.fits[key] { return known }
+        let fits = fitsUnmemoised(call, index, depth: depth)
+        memo.fits[key] = fits
+        return fits
+    }
+
+    private func fitsUnmemoised(_ call: CallShape, _ index: Int, depth: Int) -> Bool {
         let declaration = declarations[index]
         if !declaration.accepting(call).isEmpty { return true }
         guard declaration.inheritsDesignatedInitializers, depth < 8 else { return false }
@@ -352,7 +385,20 @@ extension ConstructionFacts {
 
     /// What `T.init` — or `T.init(label:…)`, when `labels` is given — runs called as a function
     /// value, following the initializers a class inherits.
+    ///
+    /// Answered once per declaration and depth, for the reason `mayFit` is.
     func referenceRefutation(_ index: Int, labels: [String]?, depth: Int = 0) -> PurityRefutation? {
+        guard let memo = memo.instance else {
+            return memoised().referenceRefutation(index, labels: labels, depth: depth)
+        }
+        let key = ReferenceKey(index: index, labels: labels, depth: depth)
+        if let known = memo.references[key] { return known }
+        let found = referenceUnmemoised(index, labels: labels, depth: depth)
+        memo.references.updateValue(found, forKey: key)
+        return found
+    }
+
+    private func referenceUnmemoised(_ index: Int, labels: [String]?, depth: Int) -> PurityRefutation? {
         let declaration = declarations[index]
         if let unconditional = declaration.unconditional { return unconditional }
         let matching = declaration.initializers.filter { labels == nil || $0.parameters.map(\.label) == labels }
@@ -373,36 +419,74 @@ extension ConstructionFacts {
     /// What decoding the declaration at `index` runs: `init(from:)`, its own, inherited or the
     /// synthesized one — which like any non-memberwise initializer runs the stored defaults first —
     /// and the decoding of every type its stored properties hold.
-    func decodeRefutation(_ index: Int, visited: inout Set<Int>) -> PurityRefutation? {
-        guard visited.insert(index).inserted else { return nil }
+    ///
+    /// Searched depth first through its superclasses and then its stored properties, each
+    /// declaration once, and the first refutation found is the witness. Answered once per
+    /// declaration in a pass: every decode site of a type asks the same question, and only a new
+    /// pass can change the answer.
+    func decodeRefutation(_ index: Int) -> PurityRefutation? {
+        guard let memo = memo.instance else { return memoised().decodeRefutation(index) }
+        if let known = memo.decodes[index] { return known }
+        var visited: Set<Int> = []
+        let found = decodeSearch(index, visited: &visited, memo: memo).refutation
+        // A search from one declaration that finds nothing went everywhere its decoding reaches.
+        if found == nil { memo.undecodable.formUnion(visited) }
+        memo.decodes.updateValue(found, forKey: index)
+        return found
+    }
+
+    /// The search under `decodeRefutation(_:)`, and whether it proved `index` reaches no refutation
+    /// by any path. A declaration skipped as visited may yet reach one — it is still being
+    /// searched, above — so a search that skipped one proves nothing. One that skipped only
+    /// declarations already proved undecodable does, and those are skipped without searching:
+    /// whatever they would mark visited reaches nothing either, so no later step can tell.
+    private func decodeSearch(
+        _ index: Int,
+        visited: inout Set<Int>,
+        memo: ConstructionMemo
+    ) -> (refutation: PurityRefutation?, reachesNothing: Bool) {
+        if memo.undecodable.contains(index) { return (nil, true) }
+        guard visited.insert(index).inserted else { return (nil, false) }
+        memo.decodeSteps += 1
         let declaration = declarations[index]
-        if let own = declaration.unconditional ?? declaration.conditionalStoredDefault { return own }
+        if let own = declaration.unconditional ?? declaration.conditionalStoredDefault { return (own, false) }
         // Every one: `#if` branches may each declare their own.
         let decoders = declaration.initializers.filter { $0.parameters.map(\.label) == ["from"] }
         if let body = decoders.lazy.compactMap(\.bodyRefutation).first {
-            return body
+            return (body, false)
         }
+        var reachesNothing = true
+        for edge in decodeEdges(of: index, memo: memo) {
+            let held = decodeSearch(edge.held, visited: &visited, memo: memo)
+            if let cause = held.refutation { return (declaration.refuted(via: edge.step, cause), false) }
+            reachesNothing = reachesNothing && held.reachesNothing
+        }
+        if reachesNothing { memo.undecodable.insert(index) }
+        return (nil, reachesNothing)
+    }
+
+    /// The declarations decoding the one at `index` decodes in turn, in the order they are
+    /// searched: its superclasses, then each stored property's types, by property name. Read from
+    /// names and stored-property types alone, so kept for the whole build.
+    private func decodeEdges(of index: Int, memo: ConstructionMemo) -> [DecodeEdge] {
+        if let known = self.memo.settled.decodeEdges[index] ?? memo.decodeEdges[index] { return known }
+        let declaration = declarations[index]
+        var edges: [DecodeEdge] = []
         if declaration.kind == .classOrActor {
             for (name, supers) in superclasses(of: declaration) {
-                for parent in supers {
-                    if let cause = decodeRefutation(parent, visited: &visited) {
-                        return declaration.refuted(via: .superclass(name), cause)
-                    }
-                }
+                edges += supers.map { DecodeEdge(step: .superclass(name), held: $0) }
             }
         }
         for (property, types) in (memberTypes[declaration.qualifiedName] ?? [:]).sorted(by: { $0.key < $1.key }) {
             for member in types where member.declaration == declaration.site {
                 for components in Self.decodedComponents(of: member.type) {
-                    for held in declarations(named: components, from: Self.memberSite(of: declaration.site)) {
-                        if let cause = decodeRefutation(held, visited: &visited) {
-                            return declaration.refuted(via: .storedProperty(property), cause)
-                        }
-                    }
+                    let held = declarations(named: components, from: Self.memberSite(of: declaration.site))
+                    edges += held.map { DecodeEdge(step: .storedProperty(property), held: $0) }
                 }
             }
         }
-        return nil
+        memo.decodeEdges[index] = edges
+        return edges
     }
 
     /// The types a decoded value of `type` is built from: the type itself, or the elements of an

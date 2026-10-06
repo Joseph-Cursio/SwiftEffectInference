@@ -35,7 +35,7 @@ The annotation grammars themselves are emitted by **[swiftidempotency](https://g
 swift package clean && swift test
 ```
 
-The test target covers the lattice laws, both annotation grammars, purity refutation, call-site and body inference, and symbol-table resolution, plus a cost budget guarding the whole-domain purity path.
+The test target covers the lattice laws, both annotation grammars, purity refutation, call-site and body inference, and symbol-table resolution, plus cost budgets guarding the whole-domain purity path and the construction table's build.
 
 `swift package clean` matters: a partial rebuild can leave a stale test binary after a pull that touches package sources.
 

@@ -1,0 +1,12 @@
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+index ef66612..374ff82 100644
+--- a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+@@ -392,7 +392,6 @@ extension ConstructionFacts {
+             return memoised().referenceRefutation(index, labels: labels, depth: depth)
+         }
+         let key = ReferenceKey(index: index, labels: labels, depth: depth)
+-        if let known = memo.references[key] { return known }
+         let found = referenceUnmemoised(index, labels: labels, depth: depth)
+         memo.references.updateValue(found, forKey: key)
+         return found

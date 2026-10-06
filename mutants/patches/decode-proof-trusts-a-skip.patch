@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+index ef66612..0a22fe1 100644
+--- a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+@@ -446,7 +446,7 @@ extension ConstructionFacts {
+         memo: ConstructionMemo
+     ) -> (refutation: PurityRefutation?, reachesNothing: Bool) {
+         if memo.undecodable.contains(index) { return (nil, true) }
+-        guard visited.insert(index).inserted else { return (nil, false) }
++        guard visited.insert(index).inserted else { return (nil, true) }
+         memo.decodeSteps += 1
+         let declaration = declarations[index]
+         if let own = declaration.unconditional ?? declaration.conditionalStoredDefault { return (own, false) }

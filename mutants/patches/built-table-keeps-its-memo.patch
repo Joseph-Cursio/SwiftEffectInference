@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/ConstructionFacts.swift b/Sources/SwiftEffectInference/ConstructionFacts.swift
+index 1072e44..4d0e473 100644
+--- a/Sources/SwiftEffectInference/ConstructionFacts.swift
++++ b/Sources/SwiftEffectInference/ConstructionFacts.swift
+@@ -172,7 +172,7 @@ public struct ConstructionFacts: Sendable, Equatable {
+         }
+         // The table leaves the build without it — a consumer may share the table between threads —
+         // but with what names were found to mean, which no pass changes.
+-        facts.memo = .init(instance: nil, settled: memo.settled)
++        facts.memo = .init(instance: memo, settled: memo.settled)
+         return facts
+     }
+ 

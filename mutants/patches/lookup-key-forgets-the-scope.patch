@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionMemo.swift b/Sources/SwiftEffectInference/Internal/ConstructionMemo.swift
+index 2cac5ef..a5df04c 100644
+--- a/Sources/SwiftEffectInference/Internal/ConstructionMemo.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionMemo.swift
+@@ -132,7 +132,7 @@ struct LookupKey: Hashable, Sendable {
+         self.aliasesSeen = aliasesSeen
+         var current = site
+         while let node = current, !Self.isRead(node) { current = node.parent }
+-        scope = current
++        scope = nil
+         siteIsScope = current != nil && current == site
+     }
+ 

@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionMemo.swift b/Sources/SwiftEffectInference/Internal/ConstructionMemo.swift
+index 2cac5ef..dc8fb4c 100644
+--- a/Sources/SwiftEffectInference/Internal/ConstructionMemo.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionMemo.swift
+@@ -87,8 +87,6 @@ final class ConstructionMemo: @unchecked Sendable {
+     /// Forgets what was refuted: the next pass judges against fuller facts.
+     func startPass() {
+         walks = [:]
+-        decodes = [:]
+-        undecodable = []
+         fits = [:]
+         references = [:]
+     }
