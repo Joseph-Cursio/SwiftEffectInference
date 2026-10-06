@@ -339,6 +339,14 @@
       "label": "an alias its own type declares is never certain — A's `Item()` is charged for B's `typealias Item = Minted`"
     },
     {
+      "id": "member-alias-not-followed",
+      "patch": "patches/member-alias-not-followed.patch",
+      "shape": "construction-hole",
+      "expected": "killed",
+      "test": "memberAlias",
+      "label": "only an alias at the head of a spelling is followed — `let s: Outer.Stamp = .init()`, where Outer declares `typealias Stamp = UUID`, is judged as the unknown `Outer.Stamp.init()` and its UUID goes unseen"
+    },
+    {
       "id": "marker-scan-reads-string-text",
       "patch": "patches/marker-scan-reads-string-text.patch",
       "shape": "purity-inference",

@@ -1,0 +1,18 @@
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+index bef6afe..9bd87e4 100644
+--- a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+@@ -222,13 +222,6 @@ extension ConstructionFacts {
+         let meant = aliases(named: head, from: site)
+         var result = meant.isCertain ? [] : [components]
+         var expansions = meant.candidates.map { (name: head, alias: $0, rest: Array(components.dropFirst())) }
+-        for position in components.indices.dropFirst() where !aliasesSeen.contains(components[position]) {
+-            let owner = components[..<position].joined(separator: ".")
+-            for alias in aliases[components[position]] ?? []
+-            where alias.scope == owner || alias.scope.hasSuffix("." + owner) {
+-                expansions.append((components[position], alias, Array(components[(position + 1)...])))
+-            }
+-        }
+         for (name, alias, rest) in expansions {
+             for spelling in spellings(of: alias.target + rest, from: alias.site, aliasesSeen: aliasesSeen.union([name]))
+             where !result.contains(spelling) {

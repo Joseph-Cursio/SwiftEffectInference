@@ -67,6 +67,7 @@ Requires a clean working tree.
 | `alias-takes-the-first-collected` | construction-hole | killed | `nestedAliasNamesakes` |
 | `alias-hides-the-written-name` | construction-hole | killed | `aliasDoesNotHijackAFrameworkName` |
 | `alias-scope-ignored` | construction-control | killed | `constructionThroughNestedAlias` |
+| `member-alias-not-followed` | construction-hole | killed | `memberAlias` |
 | `lookup-loop-not-cut` | construction-memo | killed | `lookupThatComesBackToItselfEnds` |
 | `lookup-asked-afresh` | construction-memo | killed | `spellingIsResolvedOncePerScope` |
 | `lookup-key-forgets-the-scope` | construction-control | killed | `spellingIsResolvedOncePerScope` |
@@ -86,7 +87,7 @@ The first two attack the join-semilattice the whole effect analysis rests on: a
 and a rank collision breaks the total order §26.3.3 deliberately keeps linear. The
 third makes the purity inferrer admit `Date()` — the unearned-purity it exists to
 refute (§26.3.1). All eight verified killed; the construction mutants below,
-thirty-four more, likewise.
+forty-eight more, likewise.
 
 ## `purity-witness`: a shape about what the oracle *says*
 
@@ -142,6 +143,11 @@ puts that back. `alias-hides-the-written-name` lets an alias replace the
 name it shares, where that name may be a framework type's. The control,
 `alias-scope-ignored`, forgets that an alias its own type declares is
 certain, and so charges A for B's alias.
+
+`member-alias-not-followed` is the gap that fix left. Only an alias at the
+head of a spelling was followed, so in `let s: Outer.Stamp = .init()`,
+where `Outer` declares `typealias Stamp = UUID`, the default was judged
+as the unknown `Outer.Stamp.init()`.
 
 ## `construction-memo`: what the memo may keep
 
