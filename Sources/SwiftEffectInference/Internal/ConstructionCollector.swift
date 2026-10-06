@@ -218,28 +218,30 @@ struct RawDeclaration {
         let members = implicitMembers(in: value)
         guard !members.isEmpty else { return nil }
         for named in namedTypes(in: type) {
-            guard let typeText = qualifyingText(of: named, facts: facts) else { continue }
-            for member in members {
-                guard let expression = Parser.parse(source: typeText + member).statements.first?.item else { continue }
-                if let refutation = inferrer.constructionRefutation(Syntax(expression)) { return refutation }
+            for typeText in qualifyingTexts(of: named, facts: facts) {
+                for member in members {
+                    guard let expression = Parser.parse(source: typeText + member).statements.first?.item else {
+                        continue
+                    }
+                    if let refutation = inferrer.constructionRefutation(Syntax(expression)) { return refutation }
+                }
             }
         }
         return nil
     }
 
-    /// The text that stands in front of an implicit member of `type`: the type with `?` removed and
-    /// typealiases followed — and for a clock's `Instant`, the clock, which is what the
-    /// nondeterminism classifier knows (`ContinuousClock.Instant.now` is `ContinuousClock.now`).
-    private static func qualifyingText(of type: TypeSyntax, facts: ConstructionFacts) -> String? {
+    /// The texts that may stand in front of an implicit member of `type`: the type with `?`
+    /// removed and typealiases followed — through every alias the name may mean where it is
+    /// written — and for a clock's `Instant`, the clock, which is what the nondeterminism
+    /// classifier knows (`ContinuousClock.Instant.now` is `ContinuousClock.now`).
+    private static func qualifyingTexts(of type: TypeSyntax, facts: ConstructionFacts) -> [String] {
         let unwrapped = ConstructionChecker.unwrappingOptional(type)
-        guard var components = TypeShapeCollector.components(of: unwrapped) else { return nil }
-        var seen: Set<String> = []
-        while components.count == 1, let target = facts.aliasTargets[components[0]]?.first,
-              seen.insert(components[0]).inserted {
-            components = target
+        guard let components = TypeShapeCollector.components(of: unwrapped) else { return [] }
+        return facts.spellings(of: components, from: Syntax(type)).map { spelling in
+            var spelling = spelling
+            if spelling.count > 1, spelling.last == "Instant" { spelling.removeLast() }
+            return spelling.joined(separator: ".")
         }
-        if components.count > 1, components.last == "Instant" { components.removeLast() }
-        return components.joined(separator: ".")
     }
 
     /// Every named type in `type`, outermost first: `Set<UUID>` gives `Set<UUID>` and `UUID`.
@@ -302,7 +304,7 @@ struct RawDeclaration {
 /// Walks a package once, recording every type with the parts of it that run on construction.
 final class TypeShapeCollector: SyntaxVisitor {
     private(set) var raws: [RawDeclaration] = []
-    private(set) var aliasTargets: [String: [[String]]] = [:]
+    private(set) var aliases: [String: [AliasDeclaration]] = [:]
     private(set) var protocolNames: Set<String> = []
     private(set) var protocolParents: [String: [String]] = [:]
     private(set) var memberTypes: [String: [String: [MemberType]]] = [:]
@@ -401,9 +403,20 @@ final class TypeShapeCollector: SyntaxVisitor {
         if let composition = value.as(CompositionTypeSyntax.self) {
             compositions[node.name.text, default: []] += Self.lastComponents(of: composition)
         } else if let components = Self.components(of: value) {
-            aliasTargets[node.name.text, default: []].append(components)
+            aliases[node.name.text, default: []].append(
+                .init(scope: Self.memberScope(of: Syntax(node)), target: components, site: Syntax(value))
+            )
         }
         return .skipChildren
+    }
+
+    /// The scope a declaration at `node` belongs to: the qualified name of its innermost enclosing
+    /// type, with `.<local>` appended when a function body lies between — `<local>` alone at the top
+    /// level — and empty for a top-level declaration. `reachableScopes(from:chain:)` spells them so.
+    static func memberScope(of node: Syntax) -> String {
+        let enclosing = ConstructionFacts.enclosingTypeChain(of: node).last?.name ?? ""
+        guard ConstructionFacts.bodiesCrossed(from: node).first == true else { return enclosing }
+        return enclosing.isEmpty ? "<local>" : enclosing + ".<local>"
     }
 
     /// `A`, `A.B`, `A<G>` as a type → their names, generic arguments dropped; `nil` for any other
@@ -582,7 +595,7 @@ final class TypeShapeCollector: SyntaxVisitor {
         if extended.count == 1, protocolNames.contains(bare) { return [] }
         let byName = raws.indices.filter { raws[$0].bareName == bare }
         if !byName.isEmpty { return byName }
-        let aliased = (aliasTargets[bare] ?? []).compactMap(\.last)
+        let aliased = (aliases[bare] ?? []).compactMap(\.target.last)
         return raws.indices.filter { aliased.contains(raws[$0].bareName) }
     }
 }
