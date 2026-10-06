@@ -71,8 +71,17 @@ public enum PurityVerdict: Sendable, Equatable {
 /// oracle instead of carrying parallel copies.
 public struct PurityInferrer: Sendable {
 
-    public init() {
-        // Stateless — the inferrer holds no configuration.
+    /// What constructing each of the package's types runs — see `ConstructionFacts`. Empty by
+    /// default, and an empty table leaves every answer, and its cost, exactly as it was.
+    ///
+    /// A consumer that judges a package should build the table once from its production sources
+    /// and pass it to **every** inferrer it creates: one left at `.empty` silently disagrees with
+    /// the configured ones in the same run, about any function that constructs a refuted type.
+    public let constructionFacts: ConstructionFacts
+
+    public init(constructionFacts: ConstructionFacts = .empty) {
+        // No mutable state: the one piece of configuration is an immutable table.
+        self.constructionFacts = constructionFacts
     }
 
     /// Side-effect markers — I/O, logging, persistence. Any reference in the
@@ -488,7 +497,9 @@ public struct PurityInferrer: Sendable {
     /// subscripts have parameter lists and defaults too, and no entry point here
     /// accepts them. Accessors have no parameters, and a closure signature cannot
     /// carry a default value, so both other entry points are unaffected by
-    /// construction rather than by omission.
+    /// construction rather than by omission. An initialiser's defaults are judged
+    /// from the other side instead: a body that *calls* it, omitting one, is
+    /// refuted through `ConstructionFacts` when the inferrer was given them.
     private func refutingDefaultArgument(_ signature: FunctionSignatureSyntax) -> PurityRefutation? {
         for parameter in signature.parameterClause.parameters {
             guard let defaultValue = parameter.defaultValue?.value else { continue }
@@ -518,6 +529,8 @@ public struct PurityInferrer: Sendable {
     /// read the argument labels. A consumer writing a diagnostic can say so; one
     /// that only wants a Bool never has to look.
     private func refutingMarker(in syntax: Syntax) -> PurityRefutation? {
+        let consultsConstruction = !constructionFacts.isEmpty
+        var mentionsConstructible = false
         for token in syntax.tokens(viewMode: .sourceAccurate) {
             if Self.sideEffectMarkers.contains(token.text) {
                 return .sideEffectMarker(token.text)
@@ -525,13 +538,26 @@ public struct PurityInferrer: Sendable {
             if Self.nondeterministicMarkers.contains(token.text) {
                 return .nondeterministicMarker(token.text)
             }
+            // A pre-filter, never a match: the fourth pass below matches only constructions.
+            if consultsConstruction, !mentionsConstructible, constructionFacts.mentions(token.text) {
+                mentionsConstructible = true
+            }
         }
         let fileRead = FileReadChecker()
         fileRead.walk(syntax)
         if let read = fileRead.fileRead { return .fileRead(read) }
         let checker = NondeterminismChecker()
         checker.walk(syntax)
-        return checker.source.map { .nondeterminismSource($0) }
+        if let source = checker.source { return .nondeterminismSource(source) }
+        guard mentionsConstructible else { return nil }
+        return constructionFacts.refutation(constructingIn: syntax)
+    }
+
+    /// What constructing a type runs, judged on the **transparency half only** — markers, the
+    /// classifier, file reads and nested constructions, never totality. A trap in an initializer
+    /// is a trap in a callee, and no other callee's traps are followed either.
+    func constructionRefutation(_ syntax: Syntax) -> PurityRefutation? {
+        refutingMarker(in: syntax)
     }
 
     /// The first trap in `syntax`, or `nil` when nothing in it can trap at runtime.
