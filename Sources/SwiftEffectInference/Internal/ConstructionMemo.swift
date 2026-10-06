@@ -5,15 +5,23 @@ import SwiftSyntax
 ///
 /// ## Why it exists
 ///
-/// Every construction, decode and superclass names a type, and each resolved its name from
-/// scratch — through every alias its head may mean, and every namesake — however often the same
-/// spelling had been resolved from the same scope, on every pass.
+/// Every answer here is a function of the facts it was asked of, and the same questions came back
+/// constantly. Each decode site re-walked the member-type graph, resolving every stored property's
+/// type afresh at every step, on every pass. A protocol extension's initializer was walked once per
+/// conformer, and its `self.init` resolved to every conformer each time. Building
+/// over swift-nio, swift-argument-parser, swift-algorithms and swift-syntax side by side took
+/// 2.1 s against 0.4 s for the four one by one; adding swift-collections, it never finished (see
+/// `declarations(named:from:)` on the loop through `Self`).
 ///
 /// ## What it may keep, and for how long
 ///
-/// **For the whole build: what names mean.** A lookup reads only the declarations' names, kinds,
-/// inheritance and sites, and the collected aliases and stored-property types — none of which a
-/// pass changes — so its answer is kept across passes.
+/// - **For the whole build: what names mean.** A lookup reads only the declarations' names, kinds,
+///   inheritance and sites, and the collected aliases and stored-property types — none of which a
+///   pass changes. So lookups (`declarations(named:from:)`) and the edges of the decode graph are
+///   kept across passes.
+/// - **For one pass: what is refuted.** Each pass judges against fixed declarations and fills
+///   slots for the next, so what a body constructs and what a decode runs are kept only until the
+///   pass ends (`startPass()`).
 ///
 /// A lookup is keyed by where its answer can differ, not by the node it was asked from: the
 /// innermost enclosing node the resolution reads (`LookupKey`), so every call in one body shares
@@ -38,6 +46,29 @@ final class ConstructionMemo: @unchecked Sendable {
     private(set) var lookups: [LookupKey: [Int]] = [:]
     /// The lookups being resolved.
     private var resolving: Set<LookupKey> = []
+    var decodeEdges: [Int: [DecodeEdge]] = [:]
+
+    // MARK: - For one pass
+
+    /// What constructing anything in a body, a default or an attribute's arguments incurs.
+    var walks: [Syntax: PurityRefutation?] = [:]
+    /// The decode answer for each declaration, searched from it alone.
+    var decodes: [Int: PurityRefutation?] = [:]
+    /// Declarations whose decoding reaches no refutation at all, by any path.
+    var undecodable: Set<Int> = []
+
+    // MARK: - Counted
+
+    /// How many declarations the decode search has stepped into, never reset — counted so that a
+    /// test can see a question answered once rather than infer it from a clock.
+    var decodeSteps = 0
+
+    /// Forgets what was refuted: the next pass judges against fuller facts.
+    func startPass() {
+        walks = [:]
+        decodes = [:]
+        undecodable = []
+    }
 
     /// Marks `key` as being resolved; `false` when it already is — the resolution has come back
     /// to a lookup it is inside of, with the same arguments, and would never end.
@@ -92,4 +123,10 @@ struct LookupKey: Hashable {
             return false
         }
     }
+}
+
+/// One way decoding a declaration reaches another: through its superclass, or a stored property.
+struct DecodeEdge {
+    let step: PurityRefutation.ConstructionStep
+    let held: Int
 }

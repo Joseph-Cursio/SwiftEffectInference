@@ -97,8 +97,7 @@ final class ConstructionChecker: SourceAccurateSyntaxVisitor {
                   let base = member.base else { continue }
             for components in Self.decodedComponents(of: base) {
                 for index in facts.declarations(named: components, from: Syntax(call)) {
-                    var visited: Set<Int> = []
-                    if let found = facts.decodeRefutation(index, visited: &visited) { return found }
+                    if let found = facts.decodeRefutation(index) { return found }
                 }
             }
         }

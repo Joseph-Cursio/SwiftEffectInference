@@ -145,7 +145,7 @@ public struct ConstructionFacts: Sendable, Equatable {
         let raws = collector.finish()
 
         var facts = ConstructionFacts(declarations: raws.map(\.unjudged), collector: collector)
-        // One memo for every pass: what names mean, no pass changes.
+        // One memo for every pass: what names mean is kept throughout, what is refuted per pass.
         let memo = ConstructionMemo()
         facts.memo.instance = memo
 
@@ -157,6 +157,7 @@ public struct ConstructionFacts: Sendable, Equatable {
         var refuted = 0
         var pass = 0
         while pass <= bound {
+            memo.startPass()
             let inferrer = PurityInferrer(constructionFacts: facts)
             let fresh = raws.map { $0.evaluate(with: inferrer, facts: facts) }
             if pass == 0 { bound = fresh.reduce(2) { $0 + $1.slotCount } }
@@ -196,9 +197,15 @@ public struct ConstructionFacts: Sendable, Equatable {
     }
 
     /// The refutation constructing anything in `syntax` incurs — the first in source order.
+    ///
+    /// Walked once per pass: a protocol extension's initializer belongs to every conformer, and
+    /// is judged as each one's, but what its body constructs does not depend on whose it is.
     func refutation(constructingIn syntax: Syntax) -> PurityRefutation? {
-        let checker = ConstructionChecker(facts: memoised())
+        guard let memo = memo.instance else { return memoised().refutation(constructingIn: syntax) }
+        if let known = memo.walks[syntax] { return known }
+        let checker = ConstructionChecker(facts: self)
         checker.walk(syntax)
+        memo.walks.updateValue(checker.refutation, forKey: syntax)
         return checker.refutation
     }
 
