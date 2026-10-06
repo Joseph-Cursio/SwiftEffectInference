@@ -212,16 +212,25 @@ extension ConstructionFacts {
     }
 
     /// Every spelling `components` written at `site` may stand for once typealiases are followed:
-    /// each target of each alias its head can mean, read where that alias is written and followed
-    /// in turn — and the spelling itself, unless an alias certainly binds its head. An alias
-    /// declared in one type never takes the name from another, where it may mean a framework type.
+    /// each target of each alias its head can mean, and of each alias a later component names as
+    /// a member of what precedes it (`Outer.Stamp`, wherever an `Outer` declares `Stamp`), read
+    /// where that alias is written and followed in turn — and the spelling itself, unless an alias
+    /// certainly binds its head. An alias declared in one type never takes the name from another,
+    /// where it may mean a framework type.
     func spellings(of components: [String], from site: Syntax?, aliasesSeen: Set<String> = []) -> [[String]] {
         guard let head = components.first, !aliasesSeen.contains(head) else { return [components] }
         let meant = aliases(named: head, from: site)
         var result = meant.isCertain ? [] : [components]
-        for alias in meant.candidates {
-            let expanded = alias.target + components.dropFirst()
-            for spelling in spellings(of: expanded, from: alias.site, aliasesSeen: aliasesSeen.union([head]))
+        var expansions = meant.candidates.map { (name: head, alias: $0, rest: Array(components.dropFirst())) }
+        for position in components.indices.dropFirst() where !aliasesSeen.contains(components[position]) {
+            let owner = components[..<position].joined(separator: ".")
+            for alias in aliases[components[position]] ?? []
+            where alias.scope == owner || alias.scope.hasSuffix("." + owner) {
+                expansions.append((components[position], alias, Array(components[(position + 1)...])))
+            }
+        }
+        for (name, alias, rest) in expansions {
+            for spelling in spellings(of: alias.target + rest, from: alias.site, aliasesSeen: aliasesSeen.union([name]))
             where !result.contains(spelling) {
                 result.append(spelling)
             }
