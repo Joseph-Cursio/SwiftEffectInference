@@ -368,7 +368,7 @@
       "shape": "construction-memo",
       "expected": "killed",
       "test": "lookupThatComesBackToItselfEnds",
-      "label": "a lookup re-entered with the same arguments is resolved again — `typealias SubSequence = Self` in a nested `SubSequence` and a spelling of `SubSequence.Index` recurse until the stack runs out"
+      "label": "a lookup re-entered with the same arguments is resolved again — `typealias SubSequence = Self` in `extension Base.SubSequence`, a type the package does not declare, has `Self` ask for `Self` again until the stack runs out"
     },
     {
       "id": "lookup-asked-afresh",

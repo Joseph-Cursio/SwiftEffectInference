@@ -177,6 +177,11 @@ struct ConstructionCostTests {
     /// the module-like head is dropped — and that is `SubSequence.Index` again, with the depth
     /// bound started afresh by `Self`. It recursed until the stack ran out: a package with that
     /// alias and any refutation crashed the build, and any judgement after it.
+    ///
+    /// `Self` keeps the aliases seen now, so that spelling no longer comes back to itself. One that
+    /// still does: `Self` in an extension of a type the package does not declare reads the aliases
+    /// named like that type, and `typealias SubSequence = Self` in `extension Base.SubSequence` is
+    /// one of them — `Self` there asks for `Self` there again.
     @Test("a lookup that comes back to itself ends, and what else it reached still counts", .timeLimit(.minutes(1)))
     func lookupThatComesBackToItselfEnds() throws {
         let loop = """
@@ -193,6 +198,14 @@ struct ConstructionCostTests {
         enum Elsewhere { typealias SubSequence = Other }
         """
         #expect(try constructionRefuted("make", in: loop, elsewhere))
+
+        let undeclared = """
+        extension Base.SubSequence { typealias SubSequence = Self }
+        struct Marker { let id = UUID() }
+        func make() -> Any { SubSequence.Index() }
+        """
+        #expect(try constructionRefuted("make", in: undeclared) == false)
+        #expect(try constructionRefuted("make", in: undeclared, elsewhere))
     }
 
     /// `F` is an alias of `Self.E` in `P`, and `Self` in `P` is every conformer, one of which is
