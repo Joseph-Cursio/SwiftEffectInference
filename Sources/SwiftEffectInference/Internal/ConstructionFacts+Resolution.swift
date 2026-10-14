@@ -301,10 +301,15 @@ extension ConstructionFacts {
 
     /// The classes `declaration` could inherit from — a struct or enum named in its inheritance
     /// clause is a protocol's namesake, never a superclass.
+    ///
+    /// Its own index is found once: finding it passes every namesake, so finding it again for each
+    /// candidate cost the cube of a name's namesakes over a build — and the swift compiler's tests
+    /// declare `class B: A` a thousand times, among 1,700 `class A`.
     func superclasses(of declaration: ConstructionDeclaration) -> [(name: String, candidates: [Int])] {
-        declaration.inheritedNames.map { inherited in
+        let own = indexOf(declaration)
+        return declaration.inheritedNames.map { inherited in
             (inherited, declarations(named: [inherited], from: declaration.site)
-                .filter { declarations[$0].kind == .classOrActor && $0 != indexOf(declaration) })
+                .filter { declarations[$0].kind == .classOrActor && $0 != own })
         }
     }
 
