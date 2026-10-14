@@ -316,9 +316,10 @@ extension ConstructionFacts {
     /// The classes `declaration` could inherit from — a struct or enum named in its inheritance
     /// clause is a protocol's namesake, never a superclass.
     ///
-    /// Its own index is found once: finding it passes every namesake, so finding it again for each
-    /// candidate cost the cube of a name's namesakes over a build — and the swift compiler's tests
-    /// declare `class B: A` a thousand times, among 1,700 `class A`.
+    /// Its own index is found once, and from the table: it is asked of each candidate a
+    /// construction tries, and passing every namesake to find it, each time, cost the cube of a
+    /// name's namesakes over a build — the swift compiler's tests declare `class B: A` a thousand
+    /// times, among 1,700 `class A`.
     func superclasses(of declaration: ConstructionDeclaration) -> [(name: String, candidates: [Int])] {
         let own = indexOf(declaration)
         return declaration.inheritedNames.map { inherited in
@@ -327,8 +328,9 @@ extension ConstructionFacts {
         }
     }
 
+    /// The first declaration collected at `declaration`'s site — itself, in this table.
     private func indexOf(_ declaration: ConstructionDeclaration) -> Int? {
-        indices(declaration.bareName).first { declarations[$0].site == declaration.site }
+        indicesBySite[declaration.site]
     }
 
     /// The superclasses of the class enclosing `site` — what `super.init(…)` constructs.

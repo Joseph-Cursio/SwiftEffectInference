@@ -95,6 +95,8 @@ public struct ConstructionFacts: Sendable, Equatable {
     var superclassNamesByQualifiedName: [String: [String: [String]]] = [:]
     /// The indices of the declarations naming each name in their inheritance clauses, in order.
     var indicesByInheritedName: [String: [Int]] = [:]
+    /// The first declaration collected at each site.
+    var indicesBySite: [Syntax: Int] = [:]
     /// Every `typealias A = B.C`, by the alias's bare name. A list, because each type may declare
     /// its own `A`, and `#if` branches several.
     var aliases: [String: [AliasDeclaration]] = [:]
@@ -213,6 +215,7 @@ public struct ConstructionFacts: Sendable, Equatable {
             for inherited in Set(declaration.inheritedNames) {
                 indicesByInheritedName[inherited, default: []].append(index)
             }
+            if indicesBySite[declaration.site] == nil { indicesBySite[declaration.site] = index }
         }
         for (bare, byQualifiedName) in indicesByQualifiedName {
             for (qualified, indices) in byQualifiedName {
