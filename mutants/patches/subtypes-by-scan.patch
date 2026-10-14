@@ -1,0 +1,20 @@
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+index 8862c42..9c2e2e0 100644
+--- a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+@@ -301,12 +301,11 @@ extension ConstructionFacts {
+         var seen = names
+         while !frontier.isEmpty {
+             var next: Set<String> = []
+-            let level = Set(frontier.flatMap { indicesByInheritedName[$0] ?? [] }).subtracting(held).sorted()
+-            for index in level {
++            for (index, declaration) in declarations.enumerated()
++            where declaration.inheritedNames.contains(where: frontier.contains) && !held.contains(index) {
+                 found.append(index)
+                 held.insert(index)
+-                let bareName = declarations[index].bareName
+-                if seen.insert(bareName).inserted { next.insert(bareName) }
++                if seen.insert(declaration.bareName).inserted { next.insert(declaration.bareName) }
+             }
+             frontier = next
+         }

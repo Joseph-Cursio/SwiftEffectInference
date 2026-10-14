@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+index 8862c42..b6c47b7 100644
+--- a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+@@ -330,7 +330,7 @@ extension ConstructionFacts {
+ 
+     /// The first declaration collected at `declaration`'s site — itself, in this table.
+     private func indexOf(_ declaration: ConstructionDeclaration) -> Int? {
+-        indicesBySite[declaration.site]
++        indices(declaration.bareName).first { declarations[$0].site == declaration.site }
+     }
+ 
+     /// The superclasses of the class enclosing `site` — what `super.init(…)` constructs.

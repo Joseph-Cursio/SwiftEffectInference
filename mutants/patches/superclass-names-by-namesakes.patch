@@ -1,0 +1,24 @@
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+index 8862c42..d8b0e73 100644
+--- a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+@@ -140,9 +140,16 @@ extension ConstructionFacts {
+         var frontier = [qualifiedName]
+         while let current = frontier.popLast() {
+             let bare = current.split(separator: ".").last.map(String.init) ?? current
+-            for name in superclassNamesByQualifiedName[bare]?[current] ?? [] where found.insert(name).inserted {
+-                result.append(name)
+-                frontier.append(name)
++            for index in indices(bare) where declarations[index].qualifiedName == current {
++                for inherited in declarations[index].inheritedNames {
++                    for parent in indices(inherited) where declarations[parent].kind == .classOrActor {
++                        let name = declarations[parent].qualifiedName
++                        if found.insert(name).inserted {
++                            result.append(name)
++                            frontier.append(name)
++                        }
++                    }
++                }
+             }
+         }
+         return result

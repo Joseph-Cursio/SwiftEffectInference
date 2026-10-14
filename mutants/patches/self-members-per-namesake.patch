@@ -1,0 +1,20 @@
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+index 8862c42..6387049 100644
+--- a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+@@ -262,13 +262,10 @@ extension ConstructionFacts {
+         guard components.count > 1 else { return selves.list }
+         // And a namesake of the same qualified name has the same members: each is asked once.
+         let rest = components.dropFirst().joined(separator: ".")
+-        var members = FirstFound<Int>()
+-        var asked: Set<String> = []
+-        for index in selves.list where asked.insert(declarations[index].qualifiedName).inserted {
++        return selves.list.flatMap { index in
+             let qualified = declarations[index].qualifiedName + "." + rest
+-            members.merge(declarations(named: qualified.split(separator: ".").map(String.init), from: nil))
++            return declarations(named: qualified.split(separator: ".").map(String.init), from: nil)
+         }
+-        return members.list
+     }
+ 
+     /// Every declaration conforming to `protocolName`, directly or through a protocol that
