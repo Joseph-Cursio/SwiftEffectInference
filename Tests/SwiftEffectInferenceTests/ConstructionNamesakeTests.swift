@@ -30,10 +30,14 @@ struct ConstructionNamesakeTests {
 
     /// `count` classes, each building `Self.Other` — its own nested class, and its subclasses'
     /// namesakes of it. Only `Leaf0.Other` mints an identity.
-    static func selfInClasses(count: Int) -> [String] {
+    ///
+    /// With `distinct`, each nested class has a name of its own, so that nothing but `Self` reads
+    /// all of the classes.
+    static func selfInClasses(count: Int, distinct: Bool = false) -> [String] {
         (0..<count).map { index in
-            let other = index == 0 ? "class Other { let id = UUID() }" : "class Other {}"
-            return "class Leaf\(index) { \(other); let other = Self.Other() }"
+            let name = distinct ? "Other\(index)" : "Other"
+            let other = index == 0 ? "class \(name) { let id = UUID() }" : "class \(name) {}"
+            return "class Leaf\(index) { \(other); let other = Self.\(name)() }"
         }
     }
 
