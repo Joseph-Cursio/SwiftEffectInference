@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+index 90c0a72..d157773 100644
+--- a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
+@@ -44,7 +44,7 @@ extension ConstructionFacts {
+ 
+     private func resolve(_ components: [String], from site: Syntax?, depth: Int, aliasesSeen: Set<String>) -> [Int] {
+         guard let head = components.first, !head.isEmpty, depth < 6 else { return [] }
+-        if head == "Self" { return selfDeclarations(components, from: site, aliasesSeen: aliasesSeen) }
++        if head == "Self" { return selfDeclarations(components, from: site, aliasesSeen: []) }
+         guard let bareName = components.last, !bareName.isEmpty else { return [] }
+         let written = components.joined(separator: ".")
+         let meant = aliasesSeen.contains(head) ? (candidates: [], isCertain: false) : aliases(named: head, from: site)

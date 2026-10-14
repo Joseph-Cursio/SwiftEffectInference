@@ -86,13 +86,14 @@ Requires a clean working tree.
 | `superclass-names-by-namesakes` | construction-cost | killed | `subclassNamesakesScale` |
 | `self-members-per-namesake` | construction-cost | killed | `lookupsHoldEachDeclarationOnce` |
 | `subtypes-by-scan` | construction-cost | killed | `selfInClassesScale` |
+| `self-forgets-aliases-seen` | construction-cost | killed | `aliasMetAgainThroughSelfEnds` |
 
 The first two attack the join-semilattice the whole effect analysis rests on: a
 `lub` that returns the safer effect would launder a dangerous one into a safe grade,
 and a rank collision breaks the total order §26.3.3 deliberately keeps linear. The
 third makes the purity inferrer admit `Date()` — the unearned-purity it exists to
 refute (§26.3.1). All ten verified killed; the construction mutants below,
-forty-eight more, the classifier's one, and the four namesake-cost ones,
+forty-eight more, the classifier's one, and the five construction-cost ones,
 likewise.
 
 ## `purity-witness`: a shape about what the oracle *says*
@@ -195,6 +196,12 @@ to. A clock kills those three: four times the files cost ~64× as much, where
 quadratic is ~16×, or ~16× where linear is ~4×. `self-members-per-namesake`
 asks every namesake of `Self` for its members and keeps each answer, so a
 lookup holds each declaration once per namesake. Counting kills that one.
+
+`self-forgets-aliases-seen` costs without bound. `Self` starts the aliases seen
+afresh, so `typealias F = Self.E` in a protocol that a type named `F` conforms
+to reads `F.E` as `Self.E.E`, and so on, a new lookup every time, so the cut
+for a lookup that comes back to itself never fires. The stack running out
+kills it, as it kills `lookup-loop-not-cut`.
 
 ## Adding a mutant
 
