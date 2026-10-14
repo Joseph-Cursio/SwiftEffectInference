@@ -288,17 +288,25 @@ extension ConstructionFacts {
         return subtypes(of: protocols)
     }
 
-    /// Every declaration inheriting from one of `names`, transitively.
+    /// Every declaration inheriting from one of `names`, transitively — each level in the order
+    /// the declarations were collected.
+    ///
+    /// Asked for `Self` in every class and protocol extension, so it costs what it finds: each
+    /// level's declarations are read from the table by the names they inherit, where passing every
+    /// declaration cost the size of the package for each `Self`.
     func subtypes(of names: Set<String>) -> [Int] {
         var found: [Int] = []
+        var held: Set<Int> = []
         var frontier = names
         var seen = names
         while !frontier.isEmpty {
             var next: Set<String> = []
-            for (index, declaration) in declarations.enumerated()
-            where declaration.inheritedNames.contains(where: frontier.contains) && !found.contains(index) {
+            let level = Set(frontier.flatMap { indicesByInheritedName[$0] ?? [] }).subtracting(held).sorted()
+            for index in level {
                 found.append(index)
-                if seen.insert(declaration.bareName).inserted { next.insert(declaration.bareName) }
+                held.insert(index)
+                let bareName = declarations[index].bareName
+                if seen.insert(bareName).inserted { next.insert(bareName) }
             }
             frontier = next
         }

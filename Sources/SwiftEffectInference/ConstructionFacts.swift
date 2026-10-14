@@ -93,6 +93,8 @@ public struct ConstructionFacts: Sendable, Equatable {
     /// that name inherit from directly, each once, in the order their inheritance clauses name
     /// them. A superclass is named by its bare name, so it is every class of that name.
     var superclassNamesByQualifiedName: [String: [String: [String]]] = [:]
+    /// The indices of the declarations naming each name in their inheritance clauses, in order.
+    var indicesByInheritedName: [String: [Int]] = [:]
     /// Every `typealias A = B.C`, by the alias's bare name. A list, because each type may declare
     /// its own `A`, and `#if` branches several.
     var aliases: [String: [AliasDeclaration]] = [:]
@@ -207,6 +209,9 @@ public struct ConstructionFacts: Sendable, Equatable {
             indicesByQualifiedName[bare, default: [:]][qualified, default: []].append(index)
             if declaration.kind == .classOrActor, classNames.insert([bare, qualified]).inserted {
                 classNamesByBareName[bare, default: []].append(qualified)
+            }
+            for inherited in Set(declaration.inheritedNames) {
+                indicesByInheritedName[inherited, default: []].append(index)
             }
         }
         for (bare, byQualifiedName) in indicesByQualifiedName {
