@@ -16,9 +16,13 @@ extension ConstructionFacts {
     ///
     /// Asked once per scope: the answer is kept in the memo for every site that reads the same
     /// scope (`LookupKey`). A resolution that comes back to itself with the same arguments —
-    /// through `Self`, whose expansion starts the depth bound and the aliases seen afresh, as
-    /// `typealias SubSequence = Self` in a nested type and a spelling of `SubSequence.Index` do —
-    /// would never end; that inner lookup names nothing, and the rest of the answer stands.
+    /// through `Self`, whose expansion starts the depth bound afresh — would never end; that inner
+    /// lookup names nothing, and the rest of the answer stands.
+    ///
+    /// The aliases seen are not started afresh by `Self`: an alias is never expanded inside its
+    /// own expansion, as Swift never does. When `Self` dropped them, `typealias F = Self.E` in a
+    /// protocol that a type named `F` conforms to read `F` as `Self.E`, `F.E` as `Self.E.E`, and so
+    /// on — a new lookup every time, so nothing cut it, until the stack ran out.
     func declarations(
         named components: [String],
         from site: Syntax?,
@@ -40,7 +44,7 @@ extension ConstructionFacts {
 
     private func resolve(_ components: [String], from site: Syntax?, depth: Int, aliasesSeen: Set<String>) -> [Int] {
         guard let head = components.first, !head.isEmpty, depth < 6 else { return [] }
-        if head == "Self" { return selfDeclarations(components, from: site) }
+        if head == "Self" { return selfDeclarations(components, from: site, aliasesSeen: aliasesSeen) }
         guard let bareName = components.last, !bareName.isEmpty else { return [] }
         let written = components.joined(separator: ".")
         let meant = aliasesSeen.contains(head) ? (candidates: [], isCertain: false) : aliases(named: head, from: site)
@@ -242,14 +246,17 @@ extension ConstructionFacts {
 
     /// What `Self` can be where `site` is written: the enclosing type (through a typealias, and as
     /// a protocol's conformers when the name is also a protocol's), every subclass of a non-final
-    /// class, and every conformer in a protocol extension.
-    private func selfDeclarations(_ components: [String], from site: Syntax?) -> [Int] {
+    /// class, and every conformer in a protocol extension. The lookups it asks in turn keep
+    /// `aliasesSeen`, the aliases whose expansion led here.
+    private func selfDeclarations(_ components: [String], from site: Syntax?, aliasesSeen: Set<String>) -> [Int] {
         guard let site, let innermost = Self.enclosingTypeChain(of: site).last else { return [] }
         let bare = innermost.name.split(separator: ".").last.map(String.init) ?? innermost.name
         var selves = FirstFound<Int>()
         selves.merge(indices(bare, qualified: innermost.name))
         if selves.isEmpty {
-            for alias in aliases[bare] ?? [] { selves.merge(declarations(named: alias.target, from: alias.site)) }
+            for alias in aliases[bare] ?? [] {
+                selves.merge(declarations(named: alias.target, from: alias.site, aliasesSeen: aliasesSeen))
+            }
         }
         if selves.isEmpty, !protocolNames.contains(bare) { selves.merge(indices(bare)) }
         if protocolNames.contains(bare) { selves.merge(conformers(of: bare)) }
@@ -266,7 +273,9 @@ extension ConstructionFacts {
         var asked: Set<String> = []
         for index in selves.list where asked.insert(declarations[index].qualifiedName).inserted {
             let qualified = declarations[index].qualifiedName + "." + rest
-            members.merge(declarations(named: qualified.split(separator: ".").map(String.init), from: nil))
+            members.merge(declarations(
+                named: qualified.split(separator: ".").map(String.init), from: nil, aliasesSeen: aliasesSeen
+            ))
         }
         return members.list
     }
