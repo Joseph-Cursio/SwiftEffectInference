@@ -465,6 +465,14 @@
       "expected": "killed",
       "test": "builtTableHandsOnOnlyWhatNamesMean",
       "label": "the table a build returns keeps the build's mutable memo — a consumer that shares the table between threads writes to it from each"
+    },
+    {
+      "id": "every-call-located",
+      "patch": "patches/every-call-located.patch",
+      "shape": "classifier-cost",
+      "expected": "killed",
+      "test": "chainClassifiesInLinearTime",
+      "label": "the classifier locates every call before asking whether it is a source — a call's first token is at the bottom of its member chain, so classifying a chain costs the square of its length"
     }
   ]
 }

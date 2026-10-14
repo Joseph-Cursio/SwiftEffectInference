@@ -142,7 +142,14 @@ public enum NondeterminismSources {
     /// Classifies a call expression, or `nil` when it is not a nondeterminism
     /// source.
     public static func source(of call: FunctionCallExprSyntax) -> NondeterminismSource? {
-        let position = call.positionAfterSkippingLeadingTrivia
+        // Located only once the call is known to be a source. A call's position
+        // is its first token's, and in a member chain `x.a().a()…` that token is
+        // at the bottom of the chain: reaching it costs the call's depth, so
+        // locating every call up front made classifying a chain quadratic in its
+        // length — for the many calls that are not sources at all.
+        func found(_ kind: NondeterminismSource.Kind, _ marker: String) -> NondeterminismSource {
+            NondeterminismSource(kind: kind, marker: marker, position: call.positionAfterSkippingLeadingTrivia)
+        }
 
         // `Date()`, `UUID()`, `ContinuousClock()`, `arc4random()` — a bare type
         // or function name callee.
@@ -150,41 +157,31 @@ public enum NondeterminismSources {
             let name = reference.baseName.text
             if name == "Date" {
                 if call.arguments.isEmpty {
-                    return NondeterminismSource(kind: .wallClockNow, marker: "Date()", position: position)
+                    return found(.wallClockNow, "Date()")
                 }
                 if call.arguments.first?.label?.text == "timeIntervalSinceNow" {
                     // Reported under its own spelling, not folded into `Date()`:
                     // a diagnostic naming the initializer the author wrote is
                     // the difference between "this reads the clock" and "which
                     // of these reads the clock".
-                    return NondeterminismSource(
-                        kind: .wallClockOffset,
-                        marker: "Date(timeIntervalSinceNow:)",
-                        position: position
-                    )
+                    return found(.wallClockOffset, "Date(timeIntervalSinceNow:)")
                 }
                 return nil
             }
             if name == "UUID", call.arguments.isEmpty {
-                return NondeterminismSource(kind: .identity, marker: "UUID()", position: position)
+                return found(.identity, "UUID()")
             }
             if ambientClockTypes.contains(name) {
-                return NondeterminismSource(
-                    kind: .clockAcquisition, marker: "\(name)()", position: position
-                )
+                return found(.clockAcquisition, "\(name)()")
             }
             if name == "CFAbsoluteTimeGetCurrent" {
-                return NondeterminismSource(
-                    kind: .wallClockNow, marker: "\(name)()", position: position
-                )
+                return found(.wallClockNow, "\(name)()")
             }
             if monotonicClockFunctions.contains(name) {
-                return NondeterminismSource(
-                    kind: .monotonicClock, marker: "\(name)()", position: position
-                )
+                return found(.monotonicClock, "\(name)()")
             }
             if randomFunctions.contains(name) {
-                return NondeterminismSource(kind: .randomness, marker: "\(name)()", position: position)
+                return found(.randomness, "\(name)()")
             }
             return nil
         }
@@ -197,12 +194,10 @@ public enum NondeterminismSources {
         if let base = member.base?.as(DeclReferenceExprSyntax.self) {
             let typeName = base.baseName.text
             if typeName == "Task", memberName == "sleep", !sleepsOnSuppliedClock(call) {
-                return NondeterminismSource(
-                    kind: .timedSuspension, marker: "Task.sleep", position: position
-                )
+                return found(.timedSuspension, "Task.sleep")
             }
             if memberName == "now", let kind = nowKind(ofType: typeName) {
-                return NondeterminismSource(kind: kind, marker: "\(typeName).now", position: position)
+                return found(kind, "\(typeName).now")
             }
         }
 
@@ -210,7 +205,7 @@ public enum NondeterminismSources {
         // (`values.map(…).shuffled()`), so the receiver is not inspected. A
         // supplied `using:` is the injection seam and disqualifies the match.
         if randomMembers.contains(memberName), !drawsFromSuppliedGenerator(call) {
-            return NondeterminismSource(kind: .randomness, marker: ".\(memberName)(…)", position: position)
+            return found(.randomness, ".\(memberName)(…)")
         }
 
         return nil

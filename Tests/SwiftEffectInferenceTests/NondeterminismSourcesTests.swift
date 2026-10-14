@@ -135,4 +135,27 @@ struct NondeterminismSourcesTests {
     func unknownCurrent_isNotASource() {
         #expect(firstSource(in: "let step = workflow.current") == nil)
     }
+
+    /// A consumer converts the position to the line and column it reports, so it is where the
+    /// expression starts: past its leading trivia, and at the bottom of a chain rather than at the
+    /// member that made it a source. One expression per way the classifier can report.
+    @Test("a source is located where its expression starts", arguments: [
+        "Date()",
+        "Date(timeIntervalSinceNow: 60)",
+        "UUID()",
+        "ContinuousClock()",
+        "CFAbsoluteTimeGetCurrent()",
+        "mach_absolute_time()",
+        "arc4random()",
+        "Task.sleep(for: .seconds(1))",
+        "DispatchTime.now()",
+        "values.map { $0 }.shuffled()",
+        "Date.now",
+        "Locale.current"
+    ])
+    func position(expression: String) {
+        let prefix = "let first = 0\nlet value =\n    /* leading trivia */ "
+        let found = firstSource(in: prefix + expression)
+        #expect(found?.position == AbsolutePosition(utf8Offset: prefix.utf8.count))
+    }
 }

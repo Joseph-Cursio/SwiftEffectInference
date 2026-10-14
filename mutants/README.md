@@ -81,13 +81,14 @@ Requires a clean working tree.
 | `fit-forgets-the-depth` | construction-control | killed | `shapeGuessUpNamesakeChains` |
 | `reference-asked-afresh` | construction-memo | killed | `referenceUpNamesakeChains` |
 | `built-table-keeps-its-memo` | construction-memo | killed | `builtTableHandsOnOnlyWhatNamesMean` |
+| `every-call-located` | classifier-cost | killed | `chainClassifiesInLinearTime` |
 
 The first two attack the join-semilattice the whole effect analysis rests on: a
 `lub` that returns the safer effect would launder a dangerous one into a safe grade,
 and a rank collision breaks the total order §26.3.3 deliberately keeps linear. The
 third makes the purity inferrer admit `Date()` — the unearned-purity it exists to
-refute (§26.3.1). All eight verified killed; the construction mutants below,
-forty-eight more, likewise.
+refute (§26.3.1). All ten verified killed; the construction mutants below,
+forty-eight more, and the classifier's one, likewise.
 
 ## `purity-witness`: a shape about what the oracle *says*
 
@@ -164,6 +165,15 @@ cheap on any graph a test can build — so the memo counts resolutions and decod
 and the tests count with it. `lookup-loop-not-cut` is killed by the stack running out;
 `built-table-keeps-its-memo` by the table a build returns still holding something a
 judgement writes to.
+
+## `classifier-cost`: what classifying a call costs
+
+`NondeterminismSources.source(of:)` is asked of every call in every body `PurityInferrer`
+checks, so what it costs per call is paid once per link of a member chain.
+`every-call-located` locates each call before asking whether it is a source. A call's
+position is its first token's, at the bottom of its chain, so a chain costs the square of
+its length. No kind, marker or position changes, so a clock kills it: a chain four times as
+long costs ~14× as much to classify, where linear is ~4×.
 
 ## Adding a mutant
 

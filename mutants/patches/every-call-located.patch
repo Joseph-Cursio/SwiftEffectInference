@@ -1,0 +1,15 @@
+diff --git a/Sources/SwiftEffectInference/NondeterminismSources.swift b/Sources/SwiftEffectInference/NondeterminismSources.swift
+index 34c9217..2ca2abb 100644
+--- a/Sources/SwiftEffectInference/NondeterminismSources.swift
++++ b/Sources/SwiftEffectInference/NondeterminismSources.swift
+@@ -147,8 +147,9 @@ public enum NondeterminismSources {
+         // at the bottom of the chain: reaching it costs the call's depth, so
+         // locating every call up front made classifying a chain quadratic in its
+         // length — for the many calls that are not sources at all.
++        let position = call.positionAfterSkippingLeadingTrivia
+         func found(_ kind: NondeterminismSource.Kind, _ marker: String) -> NondeterminismSource {
+-            NondeterminismSource(kind: kind, marker: marker, position: call.positionAfterSkippingLeadingTrivia)
++            NondeterminismSource(kind: kind, marker: marker, position: position)
+         }
+ 
+         // `Date()`, `UUID()`, `ContinuousClock()`, `arc4random()` — a bare type
