@@ -195,6 +195,25 @@ struct ConstructionCostTests {
         #expect(try constructionRefuted("make", in: loop, elsewhere))
     }
 
+    /// `F` is an alias of `Self.E` in `P`, and `Self` in `P` is every conformer, one of which is
+    /// named `F` — so `F.E` read the alias again, inside its own expansion, as `Self.E.E`, and so
+    /// on, a new lookup every time. Building the facts overflowed the stack. In the swift
+    /// compiler's tests, `Constraints/type_of.swift` did this.
+    @Test("an alias met again through `Self` is not expanded inside its own expansion", .timeLimit(.minutes(1)))
+    func aliasMetAgainThroughSelfEnds() throws {
+        let source = """
+        protocol P { typealias F = Self.E }
+        struct F: P { struct E { let id = UUID() } }
+        class G: F {}
+        func make() -> Any { F.E() }
+        """
+        let facts = ConstructionFacts.build(from: [Parser.parse(source: source)])
+        #expect(facts.refutedTypeNames == ["F.E"])
+        #expect(Self.path(try constructionRefutation(of: "make", in: [source])) == [
+            "F.E.id", "references the nondeterminism marker `UUID`"
+        ])
+    }
+
     /// The table a build returns may be shared between threads, so it carries nothing that a
     /// judgement writes to — only what names were found to mean, which no judgement changes and
     /// every judgement may read. And it is equal to a table that resolved nothing.
