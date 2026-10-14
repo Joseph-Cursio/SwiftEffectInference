@@ -82,13 +82,18 @@ Requires a clean working tree.
 | `reference-asked-afresh` | construction-memo | killed | `referenceUpNamesakeChains` |
 | `built-table-keeps-its-memo` | construction-memo | killed | `builtTableHandsOnOnlyWhatNamesMean` |
 | `every-call-located` | classifier-cost | killed | `chainClassifiesInLinearTime` |
+| `own-index-by-namesakes` | construction-cost | killed | `subclassNamesakesScale` |
+| `superclass-names-by-namesakes` | construction-cost | killed | `subclassNamesakesScale` |
+| `self-members-per-namesake` | construction-cost | killed | `lookupsHoldEachDeclarationOnce` |
+| `subtypes-by-scan` | construction-cost | killed | `selfInClassesScale` |
 
 The first two attack the join-semilattice the whole effect analysis rests on: a
 `lub` that returns the safer effect would launder a dangerous one into a safe grade,
 and a rank collision breaks the total order §26.3.3 deliberately keeps linear. The
 third makes the purity inferrer admit `Date()` — the unearned-purity it exists to
 refute (§26.3.1). All ten verified killed; the construction mutants below,
-forty-eight more, and the classifier's one, likewise.
+forty-eight more, the classifier's one, and the four namesake-cost ones,
+likewise.
 
 ## `purity-witness`: a shape about what the oracle *says*
 
@@ -174,6 +179,22 @@ checks, so what it costs per call is paid once per link of a member chain.
 position is its first token's, at the bottom of its chain, so a chain costs the square of
 its length. No kind, marker or position changes, so a clock kills it: a chain four times as
 long costs ~14× as much to classify, where linear is ~4×.
+
+## `construction-cost`: what namesakes cost a build
+
+In the swift compiler's tests, 23,000 files that are each their own program,
+`class A` is declared 1,700 times, and every namesake is a candidate wherever
+its name is written. An answer grows with the namesakes, so building the facts
+is quadratic in them at best. Each of these mutants makes it cubic, or worse,
+and changes no fact. `own-index-by-namesakes` passes every namesake to find a
+class's own index, which `superclasses(of:)` needs for each candidate a
+construction tries. `superclass-names-by-namesakes` does the same to find the
+superclasses that every lookup inside a class reads. `subtypes-by-scan` passes
+every declaration to find what `Self` in a class or protocol extension widens
+to. A clock kills those three: four times the files cost ~64× as much, where
+quadratic is ~16×, or ~16× where linear is ~4×. `self-members-per-namesake`
+asks every namesake of `Self` for its members and keeps each answer, so a
+lookup holds each declaration once per namesake. Counting kills that one.
 
 ## Adding a mutant
 

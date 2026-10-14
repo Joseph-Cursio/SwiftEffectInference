@@ -473,6 +473,38 @@
       "expected": "killed",
       "test": "chainClassifiesInLinearTime",
       "label": "the classifier locates every call before asking whether it is a source — a call's first token is at the bottom of its member chain, so classifying a chain costs the square of its length"
+    },
+    {
+      "id": "own-index-by-namesakes",
+      "patch": "patches/own-index-by-namesakes.patch",
+      "shape": "construction-cost",
+      "expected": "killed",
+      "test": "subclassNamesakesScale",
+      "label": "a class finds its own index by passing every namesake, for each candidate a construction tries — building an `A` from each of n `class B: A` costs n³"
+    },
+    {
+      "id": "superclass-names-by-namesakes",
+      "patch": "patches/superclass-names-by-namesakes.patch",
+      "shape": "construction-cost",
+      "expected": "killed",
+      "test": "subclassNamesakesScale",
+      "label": "a lookup's superclasses are found by passing every namesake of the class and of each name it inherits — every lookup in each of n `class B: A` costs n²"
+    },
+    {
+      "id": "self-members-per-namesake",
+      "patch": "patches/self-members-per-namesake.patch",
+      "shape": "construction-cost",
+      "expected": "killed",
+      "test": "lookupsHoldEachDeclarationOnce",
+      "label": "`Self.Inner` asks every namesake of `Self` for its members and keeps each answer — n namesakes hold each `Inner` n times"
+    },
+    {
+      "id": "subtypes-by-scan",
+      "patch": "patches/subtypes-by-scan.patch",
+      "shape": "construction-cost",
+      "expected": "killed",
+      "test": "selfInClassesScale",
+      "label": "`Self`'s subtypes are found by passing every declaration at each level — a `Self` in each of n classes costs n²"
     }
   ]
 }

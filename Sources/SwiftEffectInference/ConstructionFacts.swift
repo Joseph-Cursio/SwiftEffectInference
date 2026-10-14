@@ -86,6 +86,17 @@ public struct ConstructionFacts: Sendable, Equatable {
 
     var declarations: [ConstructionDeclaration] = []
     var indicesByBareName: [String: [Int]] = [:]
+    /// Each bare name's indices again, by qualified name: what filtering them by qualified name
+    /// finds, without passing every namesake to find it.
+    var indicesByQualifiedName: [String: [String: [Int]]] = [:]
+    /// By bare and then qualified name, the qualified names of every class the declarations of
+    /// that name inherit from directly, each once, in the order their inheritance clauses name
+    /// them. A superclass is named by its bare name, so it is every class of that name.
+    var superclassNamesByQualifiedName: [String: [String: [String]]] = [:]
+    /// The indices of the declarations naming each name in their inheritance clauses, in order.
+    var indicesByInheritedName: [String: [Int]] = [:]
+    /// The first declaration collected at each site.
+    var indicesBySite: [Syntax: Int] = [:]
     /// Every `typealias A = B.C`, by the alias's bare name. A list, because each type may declare
     /// its own `A`, and `#if` branches several.
     var aliases: [String: [AliasDeclaration]] = [:]
@@ -192,8 +203,28 @@ public struct ConstructionFacts: Sendable, Equatable {
         self.declarations = declarations
         self.protocolNames = protocolNames
         self.protocolParents = protocolParents
+        var classNamesByBareName: [String: [String]] = [:]
+        var classNames: Set<[String]> = []
         for (index, declaration) in declarations.enumerated() {
-            indicesByBareName[declaration.bareName, default: []].append(index)
+            let (bare, qualified) = (declaration.bareName, declaration.qualifiedName)
+            indicesByBareName[bare, default: []].append(index)
+            indicesByQualifiedName[bare, default: [:]][qualified, default: []].append(index)
+            if declaration.kind == .classOrActor, classNames.insert([bare, qualified]).inserted {
+                classNamesByBareName[bare, default: []].append(qualified)
+            }
+            for inherited in Set(declaration.inheritedNames) {
+                indicesByInheritedName[inherited, default: []].append(index)
+            }
+            if indicesBySite[declaration.site] == nil { indicesBySite[declaration.site] = index }
+        }
+        for (bare, byQualifiedName) in indicesByQualifiedName {
+            for (qualified, indices) in byQualifiedName {
+                var inherited = FirstFound<String>()
+                for index in indices { inherited.merge(declarations[index].inheritedNames) }
+                var supers = FirstFound<String>()
+                for name in inherited.list { supers.merge(classNamesByBareName[name] ?? []) }
+                if !supers.isEmpty { superclassNamesByQualifiedName[bare, default: [:]][qualified] = supers.list }
+            }
         }
     }
 
