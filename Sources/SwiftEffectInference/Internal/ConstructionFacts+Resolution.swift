@@ -6,6 +6,11 @@ extension ConstructionFacts {
 
     func indices(_ bareName: String) -> [Int] { indicesByBareName[bareName] ?? [] }
 
+    /// `indices(bareName)` whose qualified name is `qualifiedName`, in the same order.
+    func indices(_ bareName: String, qualified qualifiedName: String) -> [Int] {
+        indicesByQualifiedName[bareName]?[qualifiedName] ?? []
+    }
+
     /// The declarations `components` (as written, `["Outer", "Inner"]`) could name from `site`,
     /// the lexically preferred first. With no `site`, every declaration the spelling could mean.
     ///
@@ -46,16 +51,13 @@ extension ConstructionFacts {
             // Certain only in the innermost declaration, and only when nothing at the site can
             // shadow the head: there no extension context and no superclass member stands between.
             if let innermost = chain.last, !innermost.isExtension, !Self.isShadowed(head, at: site) {
-                found.merge(indices(bareName).filter {
-                    declarations[$0].qualifiedName == innermost.name + "." + written
-                })
+                found.merge(indices(bareName, qualified: innermost.name + "." + written))
                 if !found.isEmpty, !meant.isCertain { return found.list }
             }
             // An alias the innermost declaration declares shadows every outer namesake.
             if !meant.isCertain {
                 for scope in reachableScopes(from: site, chain: chain) {
-                    let qualified = scope.isEmpty ? written : scope + "." + written
-                    found.merge(indices(bareName).filter { declarations[$0].qualifiedName == qualified })
+                    found.merge(indices(bareName, qualified: scope.isEmpty ? written : scope + "." + written))
                 }
             }
         } else {
@@ -84,8 +86,9 @@ extension ConstructionFacts {
     /// function bodies within it, its outer types when it is an extended nested type, the
     /// superclasses of a class, and the top level.
     func reachableScopes(from site: Syntax, chain: [(name: String, isExtension: Bool)]) -> [String] {
-        var scopes: [String] = []
-        func add(_ scope: String) { if !scopes.contains(scope) { scopes.append(scope) } }
+        // A class's superclasses can be many — every namesake of each — so each is kept once by a set.
+        var scopes = FirstFound<String>()
+        func add(_ scope: String) { scopes.merge([scope]) }
         let bodies = Self.bodiesCrossed(from: site)
         for (level, entry) in chain.reversed().enumerated() {
             add(entry.name)
@@ -102,7 +105,7 @@ extension ConstructionFacts {
         }
         if bodies.count > chain.count, bodies[chain.count] { add("<local>") }
         add("")
-        return scopes
+        return scopes.list
     }
 
     /// For each type enclosing `site`, innermost first, and then the top level: whether a function
@@ -125,21 +128,21 @@ extension ConstructionFacts {
     }
 
     /// The qualified names of every class `qualifiedName` inherits from, transitively.
+    ///
+    /// Asked for every type enclosing every lookup, so it costs what it finds, not what shares a
+    /// name with it: each name's direct superclasses are worked out once, with the table. Passing
+    /// every namesake of each class and of each superclass it names cost the product of the two —
+    /// in the compiler's tests, a thousand `class B: A` among 1,700 `class A` — for every lookup
+    /// in every `B`.
     private func superclassNames(ofQualified qualifiedName: String) -> [String] {
         var result: [String] = []
+        var found: Set<String> = []
         var frontier = [qualifiedName]
         while let current = frontier.popLast() {
             let bare = current.split(separator: ".").last.map(String.init) ?? current
-            for index in indices(bare) where declarations[index].qualifiedName == current {
-                for inherited in declarations[index].inheritedNames {
-                    for parent in indices(inherited) where declarations[parent].kind == .classOrActor {
-                        let name = declarations[parent].qualifiedName
-                        if !result.contains(name) {
-                            result.append(name)
-                            frontier.append(name)
-                        }
-                    }
-                }
+            for name in superclassNamesByQualifiedName[bare]?[current] ?? [] where found.insert(name).inserted {
+                result.append(name)
+                frontier.append(name)
             }
         }
         return result
@@ -244,7 +247,7 @@ extension ConstructionFacts {
         guard let site, let innermost = Self.enclosingTypeChain(of: site).last else { return [] }
         let bare = innermost.name.split(separator: ".").last.map(String.init) ?? innermost.name
         var selves = FirstFound<Int>()
-        selves.merge(indices(bare).filter { declarations[$0].qualifiedName == innermost.name })
+        selves.merge(indices(bare, qualified: innermost.name))
         if selves.isEmpty {
             for alias in aliases[bare] ?? [] { selves.merge(declarations(named: alias.target, from: alias.site)) }
         }
@@ -324,7 +327,7 @@ extension ConstructionFacts {
     func superclassCandidates(enclosing site: Syntax) -> [Int] {
         guard let innermost = Self.enclosingTypeChain(of: site).last else { return [] }
         let bare = innermost.name.split(separator: ".").last.map(String.init) ?? innermost.name
-        let owners = indices(bare).filter { declarations[$0].qualifiedName == innermost.name }
+        let owners = indices(bare, qualified: innermost.name)
         var found = FirstFound<Int>()
         for owner in owners.isEmpty ? indices(bare) : owners {
             for (_, candidates) in superclasses(of: declarations[owner]) { found.merge(candidates) }
@@ -333,7 +336,8 @@ extension ConstructionFacts {
     }
 }
 
-/// What a lookup finds, each once, in the order first found.
+/// What a lookup finds — declarations, or the scopes and superclasses it reads — each once, in
+/// the order first found.
 ///
 /// Once is all any reader needs: each takes the first candidate that answers, or skips one already
 /// visited. And it bounds an answer by what there is to find. Kept with repeats, an answer through
