@@ -177,6 +177,11 @@ struct ConstructionCostTests {
     /// the module-like head is dropped — and that is `SubSequence.Index` again, with the depth
     /// bound started afresh by `Self`. It recursed until the stack ran out: a package with that
     /// alias and any refutation crashed the build, and any judgement after it.
+    ///
+    /// `Self` keeps the aliases seen now, so that spelling no longer comes back to itself. One that
+    /// still does: `Self` in an extension of a type the package does not declare reads the aliases
+    /// named like that type, and `typealias SubSequence = Self` in `extension Base.SubSequence` is
+    /// one of them — `Self` there asks for `Self` there again.
     @Test("a lookup that comes back to itself ends, and what else it reached still counts", .timeLimit(.minutes(1)))
     func lookupThatComesBackToItselfEnds() throws {
         let loop = """
@@ -193,6 +198,33 @@ struct ConstructionCostTests {
         enum Elsewhere { typealias SubSequence = Other }
         """
         #expect(try constructionRefuted("make", in: loop, elsewhere))
+
+        let undeclared = """
+        extension Base.SubSequence { typealias SubSequence = Self }
+        struct Marker { let id = UUID() }
+        func make() -> Any { SubSequence.Index() }
+        """
+        #expect(try constructionRefuted("make", in: undeclared) == false)
+        #expect(try constructionRefuted("make", in: undeclared, elsewhere))
+    }
+
+    /// `F` is an alias of `Self.E` in `P`, and `Self` in `P` is every conformer, one of which is
+    /// named `F` — so `F.E` read the alias again, inside its own expansion, as `Self.E.E`, and so
+    /// on, a new lookup every time. Building the facts overflowed the stack. In the swift
+    /// compiler's tests, `Constraints/type_of.swift` did this.
+    @Test("an alias met again through `Self` is not expanded inside its own expansion", .timeLimit(.minutes(1)))
+    func aliasMetAgainThroughSelfEnds() throws {
+        let source = """
+        protocol P { typealias F = Self.E }
+        struct F: P { struct E { let id = UUID() } }
+        class G: F {}
+        func make() -> Any { F.E() }
+        """
+        let facts = ConstructionFacts.build(from: [Parser.parse(source: source)])
+        #expect(facts.refutedTypeNames == ["F.E"])
+        #expect(Self.path(try constructionRefutation(of: "make", in: [source])) == [
+            "F.E.id", "references the nondeterminism marker `UUID`"
+        ])
     }
 
     /// The table a build returns may be shared between threads, so it carries nothing that a

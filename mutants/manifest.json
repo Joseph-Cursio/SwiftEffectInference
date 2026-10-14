@@ -368,7 +368,7 @@
       "shape": "construction-memo",
       "expected": "killed",
       "test": "lookupThatComesBackToItselfEnds",
-      "label": "a lookup re-entered with the same arguments is resolved again — `typealias SubSequence = Self` in a nested `SubSequence` and a spelling of `SubSequence.Index` recurse until the stack runs out"
+      "label": "a lookup re-entered with the same arguments is resolved again — `typealias SubSequence = Self` in `extension Base.SubSequence`, a type the package does not declare, has `Self` ask for `Self` again until the stack runs out"
     },
     {
       "id": "lookup-asked-afresh",
@@ -505,6 +505,14 @@
       "expected": "killed",
       "test": "selfInClassesScale",
       "label": "`Self`'s subtypes are found by passing every declaration at each level — a `Self` in each of n classes costs n²"
+    },
+    {
+      "id": "self-forgets-aliases-seen",
+      "patch": "patches/self-forgets-aliases-seen.patch",
+      "shape": "construction-cost",
+      "expected": "killed",
+      "test": "aliasMetAgainThroughSelfEnds",
+      "label": "`Self` starts the aliases seen afresh — `typealias F = Self.E` in a protocol a type named `F` conforms to reads `F.E` as `Self.E.E`, and so on, until the stack runs out"
     }
   ]
 }
