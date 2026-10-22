@@ -190,7 +190,9 @@ public struct PurityInferrer: Sendable {
     private static let nondeterministicMarkers: Set<String> = Set([
         "arc4random", "arc4random_uniform", "drand48", "CFAbsoluteTimeGetCurrent",
         "random", "randomElement", "shuffled",
-        "Date", "UUID"
+        "Date", "UUID",
+        // Compare against the current instant even when the calendar is handed in.
+        "isDateInToday", "isDateInYesterday", "isDateInTomorrow"
     ]).union(propertyMarkers)
 
     /// Nondeterminism markers that are **properties**, so a key path reads them
@@ -217,6 +219,11 @@ public struct PurityInferrer: Sendable {
     /// declared rather than inherited: a classifier entry would widen it as a side effect. This
     /// oracle over-refutes by design, so the reading can live here alone.
     private static let ambientCurrentTypes: Set<String> = ["Calendar"]
+
+    /// Types whose initializer without arguments reads the clock, beside the `Date()` the token
+    /// and the classifier know: `DateInterval()` starts now. Each of its other initializers takes
+    /// the instant it starts at.
+    private static let clockConstructions: Set<String> = ["DateInterval"]
 
     /// Members that read a clock when written **without a base**: `base < .now`,
     /// `deadline < .now()`. Every library type with a static `now` reads a clock
@@ -612,6 +619,9 @@ public struct PurityInferrer: Sendable {
             if let type = Self.ambientCurrentType(of: token) {
                 return .nondeterministicMarker(type + ".current")
             }
+            if Self.isClockConstruction(token) {
+                return .nondeterministicMarker(token.text + "()")
+            }
             if Self.isAmbientFormatting(token) {
                 return .nondeterministicMarker(token.text)
             }
@@ -667,6 +677,22 @@ public struct PurityInferrer: Sendable {
               let base = member.base?.as(DeclReferenceExprSyntax.self),
               ambientCurrentTypes.contains(base.baseName.text) else { return nil }
         return base.baseName.text
+    }
+
+    /// Whether `token` is one of the `clockConstructions` called without arguments, as
+    /// `DateInterval()` or `DateInterval.init()`.
+    static func isClockConstruction(_ token: TokenSyntax) -> Bool {
+        guard clockConstructions.contains(token.text),
+              let reference = token.parent?.as(DeclReferenceExprSyntax.self) else { return false }
+        var callee = Syntax(reference)
+        if let member = reference.parent?.as(MemberAccessExprSyntax.self), member.base?.id == reference.id,
+           member.declName.baseName.tokenKind == .keyword(.`init`) {
+            callee = Syntax(member)
+        }
+        guard let call = callee.parent?.as(FunctionCallExprSyntax.self), call.calledExpression.id == callee.id else {
+            return false
+        }
+        return call.arguments.isEmpty && call.trailingClosure == nil
     }
 
     /// Whether `token` names a `formatted(…)` call that formats with the user's locale, time zone

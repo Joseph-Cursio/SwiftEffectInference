@@ -63,6 +63,41 @@ struct UnspelledClockPurityTests {
         #expect(try verdict(source) == .pure, "\(source)")
     }
 
+    // MARK: - Relative to now
+
+    /// `isDateInToday` compares against the current instant, so it reads the clock even when the
+    /// calendar is handed in, and so do `isDateInYesterday` and `isDateInTomorrow`.
+    /// `DateInterval()` starts now.
+    @Test("a reader relative to now reads the clock", arguments: [
+        "func todays(_ ds: [Date], calendar: Calendar) -> Int { ds.filter { calendar.isDateInToday($0) }.count }",
+        "func late(_ d: Date, calendar: Calendar) -> Bool { calendar.isDateInYesterday(d) }",
+        "func soon(_ d: Date, calendar: Calendar) -> Bool { calendar.isDateInTomorrow(d) }",
+        "func since(_ d: Date) -> Double { DateInterval().start.timeIntervalSince(d) }",
+        "func since(_ d: Date) -> Double { DateInterval.init().start.timeIntervalSince(d) }"
+    ])
+    func relativeToNow(source: String) throws {
+        #expect(try verdict(source) == .refuted, "\(source)")
+    }
+
+    @Test("the witness is the reader")
+    func relativeToNowWitness() throws {
+        let today = "func todays(_ d: Date, calendar: Calendar) -> Bool { calendar.isDateInToday(d) }"
+        #expect(PurityInferrer().refutation(for: try function(today)) == .nondeterministicMarker("isDateInToday"))
+        let interval = "func since(_ d: Date) -> Double { DateInterval().start.timeIntervalSince(d) }"
+        #expect(PurityInferrer().refutation(for: try function(interval)) == .nondeterministicMarker("DateInterval()"))
+    }
+
+    /// Whether a date falls on a weekend depends on the date and the calendar alone, and an
+    /// interval with a start reads no clock.
+    @Test("a reader that is not relative to now", arguments: [
+        "func weekend(_ d: Date, calendar: Calendar) -> Bool { calendar.isDateInWeekend(d) }",
+        "func span(_ a: Date, _ b: Date) -> DateInterval { DateInterval(start: a, end: b) }",
+        "func span(_ a: Date) -> DateInterval { DateInterval(start: a, duration: 60) }"
+    ])
+    func notRelativeToNow(source: String) throws {
+        #expect(try verdict(source) == .pure, "\(source)")
+    }
+
     // MARK: - `timeIntervalSinceNow`
 
     /// `due.timeIntervalSinceNow` reads the clock, and is the everyday spelling of "is this
