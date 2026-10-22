@@ -528,7 +528,9 @@ public struct PurityInferrer: Sendable {
     /// names no type, and the classifier matches `Date()` only with its callee
     /// written. (`.now` is a marker of its own.) An implicit member's type is spelled in the parameter's type and
     /// nowhere else, so a default with one is judged with that type: `Date`,
-    /// `UUID` and `FileHandle` refute there as they would in front of the member.
+    /// `UUID` and `FileHandle` refute there as they would in front of the member,
+    /// and each member is judged again with the type in front of it, so
+    /// `calendar: Calendar = .current` is `Calendar.current`.
     /// A parameter whose own default has no implicit member keeps the rule above,
     /// and so does every other parameter of the same function.
     ///
@@ -563,12 +565,17 @@ public struct PurityInferrer: Sendable {
 
     /// The parameter's type, judged when its default has an implicit member, which names its type
     /// only there. A closure's members count too: the closure runs when the body calls it.
+    ///
+    /// The type's own markers refute, and so does each implicit member judged with the type
+    /// written in front of it, as a construction's default is: `calendar: Calendar = .current` is
+    /// `Calendar.current`, which no token of the type says.
     private func typeRefutation(of parameter: FunctionParameterSyntax) -> PurityRefutation? {
         guard let defaultValue = parameter.defaultValue?.value else { return nil }
         let members = ImplicitMemberChecker()
         members.walk(defaultValue)
         guard members.found else { return nil }
         return refutingMarker(in: Syntax(parameter.type))
+            ?? RawDeclaration.judge(defaultValue, declaredAs: parameter.type, with: self, facts: constructionFacts)
     }
 
     /// Any I/O, logging, persistence, clock or randomness marker anywhere in

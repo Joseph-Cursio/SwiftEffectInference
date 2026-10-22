@@ -57,6 +57,41 @@ struct AmbientSettingsPurityTests {
         #expect(try verdict(source) == .pure, "\(source)")
     }
 
+    // MARK: - A default's `.current`
+
+    /// `calendar: Calendar = .current` is `Calendar.current` on every call that omits it, and the
+    /// default spells the type nowhere. Each implicit member is judged with the parameter's type
+    /// written in front of it, so `.current` is read as the classifier and the marker scan would
+    /// read `Calendar.current`, `Locale.current` and `TimeZone.current`.
+    @Test("a default's .current reads the ambient settings", arguments: [
+        "func hour(_ d: Date, calendar: Calendar = .current) -> Int { calendar.component(.hour, from: d) }",
+        "func label(_ n: Double, locale: Locale = .current) -> String { String(n) }",
+        "func offset(_ d: Date, zone: TimeZone = .current) -> Int { zone.secondsFromGMT(for: d) }",
+        "func hour(_ d: Date, calendar: Calendar? = .current) -> Int { 0 }"
+    ])
+    func currentDefault(source: String) throws {
+        #expect(try verdict(source) == .refuted, "\(source)")
+    }
+
+    @Test("the witness names the parameter and the setting its default reads")
+    func currentDefaultWitness() throws {
+        let source = "func hour(_ d: Date, calendar: Calendar = .current) -> Int { 0 }"
+        #expect(try refutation(source) == .refutingDefaultArgument(
+            parameter: "calendar", cause: .nondeterministicMarker("Calendar.current")
+        ))
+    }
+
+    /// A setting handed in has no default to judge, and another type's `.current` or a fixed
+    /// zone reads nothing ambient.
+    @Test("a default that names no ambient setting", arguments: [
+        "func hour(_ d: Date, in calendar: Calendar) -> Int { calendar.component(.hour, from: d) }",
+        "func level(_ n: Int, env: Environment = .current) -> Int { n }",
+        "func offset(_ d: Date, zone: TimeZone = .gmt) -> Int { zone.secondsFromGMT(for: d) }"
+    ])
+    func defaultThatIsNotAmbient(source: String) throws {
+        #expect(try verdict(source) == .pure, "\(source)")
+    }
+
     // MARK: - `autoupdatingCurrent`
 
     /// `Locale.autoupdatingCurrent`, `TimeZone.autoupdatingCurrent` and
