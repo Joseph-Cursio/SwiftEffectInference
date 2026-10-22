@@ -100,17 +100,17 @@ struct DefaultArgumentPurityTests {
 
     // MARK: - An implicit member names its type in the parameter's
 
-    /// `now: Date = .now` is `Date.now`, and the default alone says so nowhere: `.now` is no
-    /// marker, and the classifier matches `Date.now` only with its base written. The type is the
-    /// one place `Date` is spelled, so a default with an implicit member is judged with it.
+    /// `at: Date = .init()` is `Date()`, and the default alone says so nowhere: `.init()` names no
+    /// type, and the classifier matches `Date()` only with its callee written. The type is the one
+    /// place `Date` is spelled, so a default with an implicit member is judged with it. (`.now` is
+    /// a marker of its own, so none of these uses it.)
     @Test("an implicit member in a default argument refutes through the parameter's type", arguments: [
-        "func stamp(_ id: Int, now: Date = .now) -> String { \"\\(id)@\\(now)\" }",
         "func stamp(_ id: Int, at moment: Date = .init()) -> String { \"\\(id)@\\(moment)\" }",
         "func tag(_ id: Int, nonce: UUID = .init()) -> String { \"\\(id)-\\(nonce)\" }",
-        "func stamp(_ id: Int, now: Date? = .now) -> String { \"\\(id)\" }",
-        "func stamp(_ id: Int, now: Date = .now.addingTimeInterval(60)) -> String { \"\\(id)@\\(now)\" }",
+        "func stamp(_ id: Int, at moment: Date? = .init()) -> String { \"\\(id)\" }",
+        "func stamp(_ id: Int, at moment: Date = .init().addingTimeInterval(60)) -> String { \"\\(id)@\\(moment)\" }",
         // The closure runs on the calls that omit it, through the body that calls it.
-        "func stamp(_ id: Int, clock: () -> Date = { .now }) -> String { \"\\(id)@\\(clock())\" }",
+        "func stamp(_ id: Int, clock: () -> Date = { .init() }) -> String { \"\\(id)@\\(clock())\" }",
         // `FileHandle.standardError` refutes with its base written, and so without it.
         "func log(_ line: String, to handle: FileHandle = .standardError) -> Int { line.count }"
     ])

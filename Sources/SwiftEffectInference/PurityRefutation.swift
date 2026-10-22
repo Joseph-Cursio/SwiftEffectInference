@@ -60,8 +60,9 @@ public enum PurityRefutation: Sendable, Equatable {
     /// token. Carries the token as written (`"FileManager"`, `"print"`).
     case sideEffectMarker(String)
 
-    /// A nondeterminism marker appeared as a bare token. Carries the token as
-    /// written (`"Date"`, `"shuffled"`).
+    /// A nondeterminism marker appeared. Carries it as written: a bare token
+    /// (`"Date"`, `"shuffled"`), or a member the token scan matches by its
+    /// name and position (`".now"`).
     ///
     /// Distinct from `nondeterminismSource` because the token scan is
     /// deliberately shape-blind and over-refutes: it cannot tell `Date()` from

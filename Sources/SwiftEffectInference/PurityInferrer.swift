@@ -193,6 +193,20 @@ public struct PurityInferrer: Sendable {
         "Date", "UUID"
     ]
 
+    /// Members that read a clock when written **without a base**: `base < .now`,
+    /// `deadline < .now()`. Every library type with a static `now` reads a clock
+    /// through it: `Date`, `DispatchTime`, `DispatchWallTime`, and the
+    /// `Instant` of `ContinuousClock` and `SuspendingClock`. The classifier
+    /// matches `Date.now` only with its base written, and a contextual type
+    /// supplies the base without spelling it.
+    ///
+    /// Matched only as a base-less member. `now` alone is a name, most often the
+    /// parameter that carries an injected instant, and `clock.now` reads a clock
+    /// the caller handed in, which is the injection seam. A package type of its
+    /// own with a `now` member is refuted along with the library's, which is the
+    /// sound direction.
+    private static let baseLessNondeterministicMarkers: Set<String> = ["now"]
+
     /// Returns `.pure` when `function` is referentially transparent — its
     /// signature is synchronous and non-throwing, neither its body nor any
     /// **default argument** references a side-effect or nondeterminism marker,
@@ -485,9 +499,9 @@ public struct PurityInferrer: Sendable {
     ///
     /// ## Except where the default names nothing
     ///
-    /// `now: Date = .now` is `Date.now`, and the default says so nowhere: `.now`
-    /// is no marker, and the classifier matches `Date.now` only with its base
-    /// written. An implicit member's type is spelled in the parameter's type and
+    /// `at: Date = .init()` is `Date()`, and the default says so nowhere: `.init()`
+    /// names no type, and the classifier matches `Date()` only with its callee
+    /// written. (`.now` is a marker of its own.) An implicit member's type is spelled in the parameter's type and
     /// nowhere else, so a default with one is judged with that type: `Date`,
     /// `UUID` and `FileHandle` refute there as they would in front of the member.
     /// A parameter whose own default has no implicit member keeps the rule above,
@@ -560,6 +574,9 @@ public struct PurityInferrer: Sendable {
             if Self.nondeterministicMarkers.contains(token.text), Self.isMarkerPosition(token) {
                 return .nondeterministicMarker(token.text)
             }
+            if Self.baseLessNondeterministicMarkers.contains(token.text), Self.isBaseLessMember(token) {
+                return .nondeterministicMarker("." + token.text)
+            }
             // A pre-filter, never a match: the fourth pass below matches only constructions.
             if consultsConstruction, !mentionsConstructible, constructionFacts.mentions(token.text) {
                 mentionsConstructible = true
@@ -591,6 +608,13 @@ public struct PurityInferrer: Sendable {
             return false
         }
         return true
+    }
+
+    /// Whether `token` is the name of a member written without a base: the `now` of `.now`.
+    static func isBaseLessMember(_ token: TokenSyntax) -> Bool {
+        guard let reference = token.parent?.as(DeclReferenceExprSyntax.self),
+              let member = reference.parent?.as(MemberAccessExprSyntax.self) else { return false }
+        return member.base == nil && member.declName.id == reference.id
     }
 
     /// What constructing a type runs, judged on the **transparency half only** — markers, the
