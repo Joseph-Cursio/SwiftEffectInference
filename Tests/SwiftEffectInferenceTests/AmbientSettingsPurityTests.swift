@@ -77,4 +77,48 @@ struct AmbientSettingsPurityTests {
         let source = "func id() -> String { Locale.autoupdatingCurrent.identifier }"
         #expect(try refutation(source) == .nondeterministicMarker("autoupdatingCurrent"))
     }
+
+    // MARK: - `formatted(…)`
+
+    /// Foundation's `formatted` formats with the user's locale, time zone and calendar unless
+    /// all three are pinned, and a relative style reads the clock as well. The same instant is
+    /// "11/14/2023, 10:13 PM" in UTC and "11/15/2023, 7:13 AM" in Tokyo, and the same `Int` is
+    /// "1,234,567" in `en_US` and "1.234.567" in `de_DE`.
+    @Test("formatted formats with the ambient settings", arguments: [
+        "func label(_ d: Date) -> String { d.formatted() }",
+        "func label(_ d: Date) -> String { d.formatted(date: .abbreviated, time: .shortened) }",
+        "func label(_ d: Date) -> String { d.formatted(.dateTime.year().month()) }",
+        "func ago(_ d: Date) -> String { d.formatted(.relative(presentation: .named)) }",
+        "func count(_ n: Int) -> String { n.formatted() }",
+        "func size(_ n: Int64) -> String { n.formatted(.byteCount(style: .file)) }",
+        "func elapsed(_ t: Duration) -> String { t.formatted(.units(allowed: [.minutes, .seconds])) }",
+        "func names(_ xs: [String]) -> String { xs.formatted() }",
+        "func label(_ e: Event) -> String { e.date.formatted(e.style) }",
+        "func labels(_ ds: [Date]) -> [String] { ds.map { $0.formatted() } }"
+    ])
+    func formatted(source: String) throws {
+        #expect(try verdict(source) == .refuted, "\(source)")
+    }
+
+    @Test("the witness is formatted")
+    func formattedWitness() throws {
+        let source = "func count(_ n: Int) -> String { n.formatted() }"
+        #expect(try refutation(source) == .nondeterministicMarker("formatted"))
+    }
+
+    /// `.iso8601` is always GMT and never localized. swift-syntax's `formatted(using:)` lays out
+    /// source text. A base-less `.formatted(formatter)` is a coding strategy's case, and a
+    /// `formatted` that is not called is some other type's property.
+    @Test("a formatted that does not read the ambient settings", arguments: [
+        "func stamp(_ d: Date) -> String { d.formatted(.iso8601) }",
+        "func stamp(_ d: Date) -> String { d.formatted(.iso8601.year().month().day()) }",
+        "func pretty(_ node: Syntax) -> String { node.formatted(using: BasicFormat()).description }",
+        "func strategy(_ f: DateFormatter) -> JSONEncoder.DateEncodingStrategy { .formatted(f) }",
+        "func isFormatted(_ s: Strategy) -> Bool { if case .formatted = s { return true }; return false }",
+        "func label(_ p: Price) -> String { p.formatted }",
+        "func label(_ n: Int) -> String { formatted(n) }"
+    ])
+    func formattedThatIsNotAmbient(source: String) throws {
+        #expect(try verdict(source) == .pure, "\(source)")
+    }
 }
