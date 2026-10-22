@@ -98,6 +98,36 @@ struct UnspelledClockPurityTests {
         #expect(try verdict(source) == .pure, "\(source)")
     }
 
+    // MARK: - The Objective-C twins
+
+    /// `NSDate` and `NSUUID` are `Date` and `UUID` under their Objective-C names, and read the
+    /// clock and mint an identity the same ways.
+    @Test("NSDate and NSUUID read the clock and mint an identity", arguments: [
+        "func since(_ d: Date) -> Double { NSDate().timeIntervalSince(d) }",
+        "func since(_ d: Date) -> Double { NSDate.now.timeIntervalSince(d) }",
+        "func tag(_ n: Int) -> String { NSUUID().uuidString + String(n) }"
+    ])
+    func bridgedTwins(source: String) throws {
+        #expect(try verdict(source) == .refuted, "\(source)")
+    }
+
+    @Test("the witness is the construction")
+    func bridgedTwinWitness() throws {
+        let source = "func tag(_ n: Int) -> String { NSUUID().uuidString + String(n) }"
+        #expect(PurityInferrer().refutation(for: try function(source)) == .nondeterministicMarker("NSUUID()"))
+    }
+
+    /// A twin built from its value, its type and a cast to it read nothing.
+    @Test("NSDate and NSUUID named with their value read nothing", arguments: [
+        "func stamp(_ s: Double) -> Double { NSDate(timeIntervalSince1970: s).timeIntervalSince1970 }",
+        "func id(_ s: String) -> String? { NSUUID(uuidString: s)?.uuidString }",
+        "func isDate(_ x: Any) -> Bool { x is NSDate }",
+        "func kind() -> AnyClass { NSUUID.self }"
+    ])
+    func bridgedTwinsWithTheirValue(source: String) throws {
+        #expect(try verdict(source) == .pure, "\(source)")
+    }
+
     // MARK: - `timeIntervalSinceNow`
 
     /// `due.timeIntervalSinceNow` reads the clock, and is the everyday spelling of "is this

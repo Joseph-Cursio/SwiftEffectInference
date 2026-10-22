@@ -213,17 +213,20 @@ public struct PurityInferrer: Sendable {
     /// Types whose static `current` reads the user's settings, beside the `Locale` and `TimeZone`
     /// the classifier knows. `Calendar.current` carries the process's time zone and the locale's
     /// calendar, so the year, the start of a day and the first weekday all move with them.
+    /// `NSCalendar` and `NSLocale` are the Objective-C twins.
     ///
     /// Kept here rather than in `NondeterminismSources`. SwiftProjectLint's non-injected
     /// nondeterminism rule reports the classifier's ambient kind, and that rule's scope is
     /// declared rather than inherited: a classifier entry would widen it as a side effect. This
     /// oracle over-refutes by design, so the reading can live here alone.
-    private static let ambientCurrentTypes: Set<String> = ["Calendar"]
+    private static let ambientCurrentTypes: Set<String> = ["Calendar", "NSCalendar", "NSLocale"]
 
-    /// Types whose initializer without arguments reads the clock, beside the `Date()` the token
-    /// and the classifier know: `DateInterval()` starts now. Each of its other initializers takes
-    /// the instant it starts at.
-    private static let clockConstructions: Set<String> = ["DateInterval"]
+    /// Types whose initializer without arguments makes a value the inputs do not determine, beside
+    /// the `Date()` and `UUID()` the token and the classifier know. `DateInterval()` starts now, and
+    /// `NSDate()` and `NSUUID()` are the Objective-C twins. Every initializer that takes arguments
+    /// names its value or the instant it starts at, so these are matched only as a construction
+    /// without them: `NSUUID(uuidString:)`, `NSDate.self` and `x as NSDate` read nothing.
+    private static let freshConstructions: Set<String> = ["DateInterval", "NSDate", "NSUUID"]
 
     /// Members that read a clock when written **without a base**: `base < .now`,
     /// `deadline < .now()`. Every library type with a static `now` reads a clock
@@ -619,8 +622,11 @@ public struct PurityInferrer: Sendable {
             if let type = Self.ambientCurrentType(of: token) {
                 return .nondeterministicMarker(type + ".current")
             }
-            if Self.isClockConstruction(token) {
+            if Self.isFreshConstruction(token) {
                 return .nondeterministicMarker(token.text + "()")
+            }
+            if token.text == "now", Self.isBridgedNow(token) {
+                return .nondeterministicMarker("NSDate.now")
             }
             if Self.isAmbientFormatting(token) {
                 return .nondeterministicMarker(token.text)
@@ -679,10 +685,10 @@ public struct PurityInferrer: Sendable {
         return base.baseName.text
     }
 
-    /// Whether `token` is one of the `clockConstructions` called without arguments, as
+    /// Whether `token` is one of the `freshConstructions` called without arguments, as
     /// `DateInterval()` or `DateInterval.init()`.
-    static func isClockConstruction(_ token: TokenSyntax) -> Bool {
-        guard clockConstructions.contains(token.text),
+    static func isFreshConstruction(_ token: TokenSyntax) -> Bool {
+        guard freshConstructions.contains(token.text),
               let reference = token.parent?.as(DeclReferenceExprSyntax.self) else { return false }
         var callee = Syntax(reference)
         if let member = reference.parent?.as(MemberAccessExprSyntax.self), member.base?.id == reference.id,
@@ -693,6 +699,15 @@ public struct PurityInferrer: Sendable {
             return false
         }
         return call.arguments.isEmpty && call.trailingClosure == nil
+    }
+
+    /// Whether `token` is the `now` of `NSDate.now`, which the classifier does not know.
+    static func isBridgedNow(_ token: TokenSyntax) -> Bool {
+        guard let reference = token.parent?.as(DeclReferenceExprSyntax.self),
+              let member = reference.parent?.as(MemberAccessExprSyntax.self),
+              member.declName.id == reference.id,
+              let base = member.base?.as(DeclReferenceExprSyntax.self) else { return false }
+        return base.baseName.text == "NSDate"
     }
 
     /// Whether `token` names a `formatted(…)` call that formats with the user's locale, time zone

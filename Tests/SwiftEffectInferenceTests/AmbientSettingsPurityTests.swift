@@ -34,7 +34,10 @@ struct AmbientSettingsPurityTests {
     @Test("Calendar.current reads the ambient settings", arguments: [
         "func year(_ d: Date) -> Int { Calendar.current.component(.year, from: d) }",
         "func day(_ d: Date) -> Date { Calendar.current.startOfDay(for: d) }",
-        "func days(_ ds: [Date]) -> [Int] { ds.map { Calendar.current.component(.day, from: $0) } }"
+        "func days(_ ds: [Date]) -> [Int] { ds.map { Calendar.current.component(.day, from: $0) } }",
+        // The Objective-C twins.
+        "func hour(_ d: Date) -> Int { NSCalendar.current.component(.hour, from: d) }",
+        "func id() -> String { NSLocale.current.identifier }"
     ])
     func calendarCurrent(source: String) throws {
         #expect(try verdict(source) == .refuted, "\(source)")
