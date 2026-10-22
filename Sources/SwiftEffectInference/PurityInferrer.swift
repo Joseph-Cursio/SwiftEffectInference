@@ -187,11 +187,21 @@ public struct PurityInferrer: Sendable {
     /// `gettimeofday()`, `Locale.current` and `TimeZone.current` all reached
     /// **`.pure`** — seven sources this module's own classifier already knew
     /// about, waved through by this module's own purity oracle.
-    private static let nondeterministicMarkers: Set<String> = [
+    private static let nondeterministicMarkers: Set<String> = Set([
         "arc4random", "arc4random_uniform", "drand48", "CFAbsoluteTimeGetCurrent",
         "random", "randomElement", "shuffled",
         "Date", "UUID"
-    ]
+    ]).union(propertyMarkers)
+
+    /// Nondeterminism markers that are **properties**, so a key path reads them
+    /// as well as a member access does: `ds.map(\.timeIntervalSinceNow)`.
+    ///
+    /// `due.timeIntervalSinceNow` reads the clock, and is the everyday spelling
+    /// of "is this overdue". Nothing matched it: the name is no marker, and the
+    /// classifier knows `Date(timeIntervalSinceNow:)` only as an initializer. A
+    /// body that also spelled `Date` was refuted for the token, and one that
+    /// took its `Date` from a parameter or a property was `.pure`.
+    private static let propertyMarkers: Set<String> = ["timeIntervalSinceNow"]
 
     /// Members that read a clock when written **without a base**: `base < .now`,
     /// `deadline < .now()`. Every library type with a static `now` reads a clock
@@ -592,20 +602,22 @@ public struct PurityInferrer: Sendable {
         return constructionFacts.refutation(constructingIn: syntax)
     }
 
-    /// Whether `token` is where a marker can be: an identifier, and not a key path's component.
+    /// Whether `token` is where a marker can be: an identifier, and not a key path's component
+    /// unless the marker is a property.
     ///
     /// The text of a string literal is not code: `"Date"` and `@AppStorage("shuffled")` name
     /// nothing. A key path's component names a property, read when the key path is applied —
-    /// `rows.map(\.random)` reads each row's own `random` — and **no marker is a property**: each
-    /// names a type, a free function, a method or an argument label, none of which a key path can
-    /// name. A marker that is a property would have to be matched here too. The root is still
-    /// read: `\Date.timeIntervalSince1970` mentions `Date`. A member name is still matched,
+    /// `rows.map(\.random)` reads each row's own `random` — and most markers are not properties:
+    /// they name a type, a free function, a method or an argument label, none of which a key path
+    /// can name. The `propertyMarkers` are the exception, and are matched there too:
+    /// `ds.map(\.timeIntervalSinceNow)` reads the clock once per date. The root is still read:
+    /// `\Date.timeIntervalSince1970` mentions `Date`. A member name is still matched,
     /// `rows.map { $0.random }` included, because a member can be a static method: `Int.random`.
     static func isMarkerPosition(_ token: TokenSyntax) -> Bool {
         guard case .identifier = token.tokenKind else { return false }
         if let reference = token.parent?.as(DeclReferenceExprSyntax.self),
            reference.parent?.is(KeyPathPropertyComponentSyntax.self) == true {
-            return false
+            return propertyMarkers.contains(token.text)
         }
         return true
     }

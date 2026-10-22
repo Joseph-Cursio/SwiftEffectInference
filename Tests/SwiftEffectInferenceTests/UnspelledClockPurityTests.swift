@@ -62,4 +62,35 @@ struct UnspelledClockPurityTests {
     func nowThatIsNotBaseLess(source: String) throws {
         #expect(try verdict(source) == .pure, "\(source)")
     }
+
+    // MARK: - `timeIntervalSinceNow`
+
+    /// `due.timeIntervalSinceNow` reads the clock, and is the everyday spelling of "is this
+    /// overdue". It is a property, so a key path reads it too, rooted or not.
+    @Test("timeIntervalSinceNow reads the clock", arguments: [
+        "func overdue(_ task: Task) -> Bool { task.due.timeIntervalSinceNow < 0 }",
+        "func ages(_ ds: [Date]) -> [Double] { ds.map(\\.timeIntervalSinceNow) }",
+        "func ages(_ ts: [Task]) -> [Double] { ts.map(\\Task.due.timeIntervalSinceNow) }",
+        "func ages(_ ds: [Date]) -> [Double] { ds.map { $0.timeIntervalSinceNow } }"
+    ])
+    func timeIntervalSinceNow(source: String) throws {
+        #expect(try verdict(source) == .refuted, "\(source)")
+    }
+
+    @Test("the witness is the property")
+    func timeIntervalSinceNowWitness() throws {
+        let source = "func overdue(_ task: Task) -> Bool { task.due.timeIntervalSinceNow < 0 }"
+        let refutation = PurityInferrer().refutation(for: try function(source))
+        #expect(refutation == .nondeterministicMarker("timeIntervalSinceNow"))
+    }
+
+    /// Only a property marker is matched as a key path's component. The others name types,
+    /// functions and labels, which no key path can name.
+    @Test("a key path's other components are still not markers", arguments: [
+        "func f(_ rows: [Row]) -> [Int] { rows.map(\\.random) }",
+        "func f(_ ds: [Date]) -> [Double] { ds.map(\\.timeIntervalSince1970) }"
+    ])
+    func otherKeyPathComponents(source: String) throws {
+        #expect(try verdict(source) == .pure, "\(source)")
+    }
 }
