@@ -483,6 +483,16 @@ public struct PurityInferrer: Sendable {
     /// refute exactly the code this inferrer should be rewarding. So the walk
     /// starts at `parameter.defaultValue?.value` and nowhere else.
     ///
+    /// ## Except where the default names nothing
+    ///
+    /// `now: Date = .now` is `Date.now`, and the default says so nowhere: `.now`
+    /// is no marker, and the classifier matches `Date.now` only with its base
+    /// written. An implicit member's type is spelled in the parameter's type and
+    /// nowhere else, so a default with one is judged with that type: `Date`,
+    /// `UUID` and `FileHandle` refute there as they would in front of the member.
+    /// A parameter whose own default has no implicit member keeps the rule above,
+    /// and so does every other parameter of the same function.
+    ///
     /// ## Totality travels with the markers
     ///
     /// `!isTotal` is checked here for the same reason it is checked on the body: a
@@ -503,11 +513,23 @@ public struct PurityInferrer: Sendable {
     private func refutingDefaultArgument(_ signature: FunctionSignatureSyntax) -> PurityRefutation? {
         for parameter in signature.parameterClause.parameters {
             guard let defaultValue = parameter.defaultValue?.value else { continue }
-            guard let cause = bodyRefutation(Syntax(defaultValue)) else { continue }
+            guard let cause = bodyRefutation(Syntax(defaultValue)) ?? typeRefutation(of: parameter) else {
+                continue
+            }
             let name = parameter.secondName?.text ?? parameter.firstName.text
             return .refutingDefaultArgument(parameter: name, cause: cause)
         }
         return nil
+    }
+
+    /// The parameter's type, judged when its default has an implicit member, which names its type
+    /// only there. A closure's members count too: the closure runs when the body calls it.
+    private func typeRefutation(of parameter: FunctionParameterSyntax) -> PurityRefutation? {
+        guard let defaultValue = parameter.defaultValue?.value else { return nil }
+        let members = ImplicitMemberChecker()
+        members.walk(defaultValue)
+        guard members.found else { return nil }
+        return refutingMarker(in: Syntax(parameter.type))
     }
 
     /// Any I/O, logging, persistence, clock or randomness marker anywhere in
@@ -679,6 +701,18 @@ private final class FileReadChecker: SourceAccurateSyntaxVisitor {
         else { return .visitChildren }
         if fileRead == nil { fileRead = "\(callee.baseName.text)(contentsOf:)" }
         return .visitChildren
+    }
+}
+
+/// Detects a base-less member — `.now`, `.init()`, `.standardError` — which takes its type from
+/// whatever the code around it declares.
+final class ImplicitMemberChecker: SourceAccurateSyntaxVisitor {
+
+    private(set) var found = false
+
+    override func visit(_ node: MemberAccessExprSyntax) -> SyntaxVisitorContinueKind {
+        if node.base == nil { found = true }
+        return found ? .skipChildren : .visitChildren
     }
 }
 
