@@ -201,7 +201,22 @@ public struct PurityInferrer: Sendable {
     /// classifier knows `Date(timeIntervalSinceNow:)` only as an initializer. A
     /// body that also spelled `Date` was refuted for the token, and one that
     /// took its `Date` from a parameter or a property was `.pure`.
-    private static let propertyMarkers: Set<String> = ["timeIntervalSinceNow"]
+    ///
+    /// `autoupdatingCurrent` is the `Locale`, `TimeZone` or `Calendar` that follows the user's
+    /// settings as they change. It is the default of every Foundation format style, so a default
+    /// argument often spells it base-less: `locale: Locale = .autoupdatingCurrent`. No other type
+    /// declares the name.
+    private static let propertyMarkers: Set<String> = ["timeIntervalSinceNow", "autoupdatingCurrent"]
+
+    /// Types whose static `current` reads the user's settings, beside the `Locale` and `TimeZone`
+    /// the classifier knows. `Calendar.current` carries the process's time zone and the locale's
+    /// calendar, so the year, the start of a day and the first weekday all move with them.
+    ///
+    /// Kept here rather than in `NondeterminismSources`. SwiftProjectLint's non-injected
+    /// nondeterminism rule reports the classifier's ambient kind, and that rule's scope is
+    /// declared rather than inherited: a classifier entry would widen it as a side effect. This
+    /// oracle over-refutes by design, so the reading can live here alone.
+    private static let ambientCurrentTypes: Set<String> = ["Calendar"]
 
     /// Members that read a clock when written **without a base**: `base < .now`,
     /// `deadline < .now()`. Every library type with a static `now` reads a clock
@@ -587,6 +602,9 @@ public struct PurityInferrer: Sendable {
             if Self.baseLessNondeterministicMarkers.contains(token.text), Self.isBaseLessMember(token) {
                 return .nondeterministicMarker("." + token.text)
             }
+            if let type = Self.ambientCurrentType(of: token) {
+                return .nondeterministicMarker(type + ".current")
+            }
             // A pre-filter, never a match: the fourth pass below matches only constructions.
             if consultsConstruction, !mentionsConstructible, constructionFacts.mentions(token.text) {
                 mentionsConstructible = true
@@ -627,6 +645,18 @@ public struct PurityInferrer: Sendable {
         guard let reference = token.parent?.as(DeclReferenceExprSyntax.self),
               let member = reference.parent?.as(MemberAccessExprSyntax.self) else { return false }
         return member.base == nil && member.declName.id == reference.id
+    }
+
+    /// The type whose `current` `token` names, when it is one of the `ambientCurrentTypes`:
+    /// `Calendar` for the `current` of `Calendar.current`.
+    static func ambientCurrentType(of token: TokenSyntax) -> String? {
+        guard token.text == "current",
+              let reference = token.parent?.as(DeclReferenceExprSyntax.self),
+              let member = reference.parent?.as(MemberAccessExprSyntax.self),
+              member.declName.id == reference.id,
+              let base = member.base?.as(DeclReferenceExprSyntax.self),
+              ambientCurrentTypes.contains(base.baseName.text) else { return nil }
+        return base.baseName.text
     }
 
     /// What constructing a type runs, judged on the **transparency half only** — markers, the
