@@ -98,6 +98,38 @@ struct UnspelledClockPurityTests {
         #expect(try verdict(source) == .pure, "\(source)")
     }
 
+    // MARK: - A time zone's readers relative to now
+
+    /// A time zone's offset, its daylight-saving state and its next transition depend on the
+    /// instant they are asked about, and without one they ask about now. Each also takes the
+    /// instant as an argument, which reads no clock.
+    @Test("a time zone read without an instant reads the clock", arguments: [
+        "func offset(_ zone: TimeZone) -> Int { zone.secondsFromGMT() }",
+        "func summer(_ zone: TimeZone) -> Bool { zone.isDaylightSavingTime() }",
+        "func shift(_ zone: TimeZone) -> Double { zone.daylightSavingTimeOffset() }",
+        "func next(_ zone: TimeZone) -> Date? { zone.nextDaylightSavingTimeTransition }",
+        "func next(_ zones: [TimeZone]) -> [Date?] { zones.map(\\.nextDaylightSavingTimeTransition) }"
+    ])
+    func timeZoneReadsNow(source: String) throws {
+        #expect(try verdict(source) == .refuted, "\(source)")
+    }
+
+    @Test("the witness is the member")
+    func timeZoneReadsNowWitness() throws {
+        let source = "func offset(_ zone: TimeZone) -> Int { zone.secondsFromGMT() }"
+        #expect(PurityInferrer().refutation(for: try function(source)) == .nondeterministicMarker("secondsFromGMT"))
+    }
+
+    @Test("a time zone read at an instant reads no clock", arguments: [
+        "func offset(_ zone: TimeZone, at d: Date) -> Int { zone.secondsFromGMT(for: d) }",
+        "func summer(_ zone: TimeZone, at d: Date) -> Bool { zone.isDaylightSavingTime(for: d) }",
+        "func shift(_ zone: TimeZone, at d: Date) -> Double { zone.daylightSavingTimeOffset(for: d) }",
+        "func next(_ zone: TimeZone, after d: Date) -> Date? { zone.nextDaylightSavingTimeTransition(after: d) }"
+    ])
+    func timeZoneReadsAnInstant(source: String) throws {
+        #expect(try verdict(source) == .pure, "\(source)")
+    }
+
     // MARK: - The Objective-C twins
 
     /// `NSDate` and `NSUUID` are `Date` and `UUID` under their Objective-C names, and read the

@@ -228,6 +228,15 @@ public struct PurityInferrer: Sendable {
     /// without them: `NSUUID(uuidString:)`, `NSDate.self` and `x as NSDate` read nothing.
     private static let freshConstructions: Set<String> = ["DateInterval", "NSDate", "NSUUID"]
 
+    /// Members that ask about now when they are given no instant: a time zone's offset, its
+    /// daylight-saving state and its next transition. Each has a form that takes the instant,
+    /// `secondsFromGMT(for:)` and `nextDaylightSavingTimeTransition(after:)` among them, and that
+    /// form reads no clock. So these match only when read as a property or called without
+    /// arguments.
+    private static let nowByDefaultMembers: Set<String> = [
+        "secondsFromGMT", "isDaylightSavingTime", "daylightSavingTimeOffset", "nextDaylightSavingTimeTransition"
+    ]
+
     /// Members that read a clock when written **without a base**: `base < .now`,
     /// `deadline < .now()`. Every library type with a static `now` reads a clock
     /// through it: `Date`, `DispatchTime`, `DispatchWallTime`, and the
@@ -628,6 +637,9 @@ public struct PurityInferrer: Sendable {
             if token.text == "now", Self.isBridgedNow(token) {
                 return .nondeterministicMarker("NSDate.now")
             }
+            if Self.readsNowByDefault(token) {
+                return .nondeterministicMarker(token.text)
+            }
             if Self.isAmbientFormatting(token) {
                 return .nondeterministicMarker(token.text)
             }
@@ -708,6 +720,20 @@ public struct PurityInferrer: Sendable {
               member.declName.id == reference.id,
               let base = member.base?.as(DeclReferenceExprSyntax.self) else { return false }
         return base.baseName.text == "NSDate"
+    }
+
+    /// Whether `token` is one of the `nowByDefaultMembers` given no instant: read as a property,
+    /// a key path's included, or called without arguments.
+    static func readsNowByDefault(_ token: TokenSyntax) -> Bool {
+        guard nowByDefaultMembers.contains(token.text),
+              let reference = token.parent?.as(DeclReferenceExprSyntax.self) else { return false }
+        if reference.parent?.is(KeyPathPropertyComponentSyntax.self) == true { return true }
+        guard let member = reference.parent?.as(MemberAccessExprSyntax.self),
+              member.declName.id == reference.id else { return false }
+        guard let call = member.parent?.as(FunctionCallExprSyntax.self), call.calledExpression.id == member.id else {
+            return true
+        }
+        return call.arguments.isEmpty && call.trailingClosure == nil
     }
 
     /// Whether `token` names a `formatted(…)` call that formats with the user's locale, time zone
