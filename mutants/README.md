@@ -87,14 +87,36 @@ Requires a clean working tree.
 | `self-members-per-namesake` | construction-cost | killed | `lookupsHoldEachDeclarationOnce` |
 | `subtypes-by-scan` | construction-cost | killed | `selfInClassesScale` |
 | `self-forgets-aliases-seen` | construction-cost | killed | `aliasMetAgainThroughSelfEnds` |
+| `default-type-never-judged` | purity-unspelled | killed | `implicitMemberInDefaultArgument` |
+| `default-type-always-judged` | purity-unspelled | killed | `typeWithoutImplicitMemberStaysPure` |
+| `default-member-not-rebuilt` | purity-unspelled | killed | `currentDefault` |
+| `implicit-member-in-closure-default-ignored` | purity-unspelled | killed | `implicitMemberInDefaultArgument` |
+| `base-less-now-unmatched` | purity-unspelled | killed | `baseLessNow` |
+| `now-matched-with-a-base` | purity-unspelled | killed | `nowThatIsNotBaseLess` |
+| `time-interval-since-now-unmatched` | purity-unspelled | killed | `timeIntervalSinceNow` |
+| `property-marker-not-read-in-key-path` | purity-unspelled | killed | `timeIntervalSinceNow` |
+| `calendar-current-unmatched` | purity-unspelled | killed | `calendarCurrent` |
+| `ambient-twins-unmatched` | purity-unspelled | killed | `calendarCurrent` |
+| `current-matched-on-any-base` | purity-unspelled | killed | `calendarHandedIn` |
+| `autoupdating-current-unmatched` | purity-unspelled | killed | `autoupdatingCurrent` |
+| `formatted-unmatched` | purity-unspelled | killed | `formatted` |
+| `syntax-formatting-not-exempt` | purity-unspelled | killed | `formattedThatIsNotAmbient` |
+| `iso8601-not-exempt` | purity-unspelled | killed | `formattedThatIsNotAmbient` |
+| `base-less-formatted-matched` | purity-unspelled | killed | `formattedThatIsNotAmbient` |
+| `relative-to-now-unmatched` | purity-unspelled | killed | `relativeToNow` |
+| `fresh-construction-unmatched` | purity-unspelled | killed | `relativeToNow` |
+| `fresh-construction-takes-arguments` | purity-unspelled | killed | `notRelativeToNow` |
+| `bridged-now-unmatched` | purity-unspelled | killed | `bridgedTwins` |
+| `now-by-default-unmatched` | purity-unspelled | killed | `timeZoneReadsNow` |
+| `now-by-default-given-an-instant` | purity-unspelled | killed | `timeZoneReadsAnInstant` |
 
 The first two attack the join-semilattice the whole effect analysis rests on: a
 `lub` that returns the safer effect would launder a dangerous one into a safe grade,
 and a rank collision breaks the total order §26.3.3 deliberately keeps linear. The
 third makes the purity inferrer admit `Date()` — the unearned-purity it exists to
 refute (§26.3.1). All ten verified killed; the construction mutants below,
-forty-eight more, the classifier's one, and the five construction-cost ones,
-likewise.
+forty-eight more, the classifier's one, the five construction-cost ones, and
+the twenty-two for the unspelled reads, likewise.
 
 ## `purity-witness`: a shape about what the oracle *says*
 
@@ -120,6 +142,29 @@ classifier reads as deterministic. That assertion is now in the killer.
 
 **Re-run the whole corpus after any change to a refuter**, not just the mutants in
 the shape you touched. A mutant that goes quiet does so silently.
+
+## `purity-unspelled`: a read that spells no marker
+
+Twenty-two mutants for the clock and settings reads that spell no marker:
+
+- an implicit member in a default, judged by its parameter's type and again with the
+  type in front of it, closures included;
+- a base-less `.now`, and `NSDate.now`;
+- `timeIntervalSinceNow`, in a key path too;
+- `Calendar.current` and its Objective-C twins, and `autoupdatingCurrent`;
+- a `formatted(…)` call;
+- `isDateInToday` and its siblings;
+- a construction without arguments: `DateInterval()`, `NSDate()`, `NSUUID()`;
+- a time zone's readers given no instant.
+
+On `main` each was caught only when `Date` was written somewhere else in the same
+body, so a function that took its date from a parameter was `.pure`.
+
+Each check has a mutant that drops it. Most also have one that widens it past its
+controls: an injected `clock.now`, `config.current`, swift-syntax's
+`formatted(using:)`, an `.iso8601` style, a coding strategy's `.formatted(f)`, a
+default that reads through no type, `DateInterval(start:end:)`, and
+`secondsFromGMT(for:)`.
 
 ## `construction-*`: what constructing a type runs
 

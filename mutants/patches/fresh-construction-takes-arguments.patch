@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/PurityInferrer.swift b/Sources/SwiftEffectInference/PurityInferrer.swift
+index e379c2e..0df4012 100644
+--- a/Sources/SwiftEffectInference/PurityInferrer.swift
++++ b/Sources/SwiftEffectInference/PurityInferrer.swift
+@@ -711,7 +711,7 @@ public struct PurityInferrer: Sendable {
+         guard let call = callee.parent?.as(FunctionCallExprSyntax.self), call.calledExpression.id == callee.id else {
+             return false
+         }
+-        return call.arguments.isEmpty && call.trailingClosure == nil
++        return true
+     }
+ 
+     /// Whether `token` is the `now` of `NSDate.now`, which the classifier does not know.

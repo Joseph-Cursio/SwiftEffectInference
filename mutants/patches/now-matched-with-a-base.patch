@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/PurityInferrer.swift b/Sources/SwiftEffectInference/PurityInferrer.swift
+index e379c2e..ed6e40d 100644
+--- a/Sources/SwiftEffectInference/PurityInferrer.swift
++++ b/Sources/SwiftEffectInference/PurityInferrer.swift
+@@ -683,7 +683,7 @@ public struct PurityInferrer: Sendable {
+     static func isBaseLessMember(_ token: TokenSyntax) -> Bool {
+         guard let reference = token.parent?.as(DeclReferenceExprSyntax.self),
+               let member = reference.parent?.as(MemberAccessExprSyntax.self) else { return false }
+-        return member.base == nil && member.declName.id == reference.id
++        return member.declName.id == reference.id
+     }
+ 
+     /// The type whose `current` `token` names, when it is one of the `ambientCurrentTypes`:

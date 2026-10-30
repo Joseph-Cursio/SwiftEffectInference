@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/PurityInferrer.swift b/Sources/SwiftEffectInference/PurityInferrer.swift
+index e379c2e..86dffed 100644
+--- a/Sources/SwiftEffectInference/PurityInferrer.swift
++++ b/Sources/SwiftEffectInference/PurityInferrer.swift
+@@ -762,7 +762,7 @@ public struct PurityInferrer: Sendable {
+               call.calledExpression.id == member.id else { return false }
+         if call.arguments.contains(where: { $0.label?.text == "using" }) { return false }
+         guard call.arguments.count == 1, let style = call.arguments.first, style.label == nil else { return true }
+-        return baseLessRoot(of: style.expression) != "iso8601"
++        return true
+     }
+ 
+     /// The member at the bottom of a chain when it is written without a base: `iso8601` for

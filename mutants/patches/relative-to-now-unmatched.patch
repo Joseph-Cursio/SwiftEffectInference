@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/PurityInferrer.swift b/Sources/SwiftEffectInference/PurityInferrer.swift
+index e379c2e..0bf6d47 100644
+--- a/Sources/SwiftEffectInference/PurityInferrer.swift
++++ b/Sources/SwiftEffectInference/PurityInferrer.swift
+@@ -192,7 +192,7 @@ public struct PurityInferrer: Sendable {
+         "random", "randomElement", "shuffled",
+         "Date", "UUID",
+         // Compare against the current instant even when the calendar is handed in.
+-        "isDateInToday", "isDateInYesterday", "isDateInTomorrow"
++        "isDateInNoDay"
+     ]).union(propertyMarkers)
+ 
+     /// Nondeterminism markers that are **properties**, so a key path reads them

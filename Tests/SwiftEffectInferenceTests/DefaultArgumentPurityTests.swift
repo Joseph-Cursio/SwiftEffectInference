@@ -98,6 +98,46 @@ struct DefaultArgumentPurityTests {
         #expect(inferrer.verdict(for: function) == .refuted)
     }
 
+    // MARK: - An implicit member names its type in the parameter's
+
+    /// `at: Date = .init()` is `Date()`, and the default alone says so nowhere: `.init()` names no
+    /// type, and the classifier matches `Date()` only with its callee written. The type is the one
+    /// place `Date` is spelled, so a default with an implicit member is judged with it. (`.now` is
+    /// a marker of its own, so none of these uses it.)
+    @Test("an implicit member in a default argument refutes through the parameter's type", arguments: [
+        "func stamp(_ id: Int, at moment: Date = .init()) -> String { \"\\(id)@\\(moment)\" }",
+        "func tag(_ id: Int, nonce: UUID = .init()) -> String { \"\\(id)-\\(nonce)\" }",
+        "func stamp(_ id: Int, at moment: Date? = .init()) -> String { \"\\(id)\" }",
+        "func stamp(_ id: Int, at moment: Date = .init().addingTimeInterval(60)) -> String { \"\\(id)@\\(moment)\" }",
+        // The closure runs on the calls that omit it, through the body that calls it.
+        "func stamp(_ id: Int, clock: () -> Date = { .init() }) -> String { \"\\(id)@\\(clock())\" }",
+        // `FileHandle.standardError` refutes with its base written, and so without it.
+        "func log(_ line: String, to handle: FileHandle = .standardError) -> Int { line.count }"
+    ])
+    func implicitMemberInDefaultArgument(source: String) throws {
+        #expect(inferrer.verdict(for: try firstFunction(in: source)) == .refuted, "\(source)")
+    }
+
+    @Test("the witness names the parameter and the type its default is read through")
+    func implicitMemberWitness() throws {
+        let function = try firstFunction(in: "func tag(_ id: Int, nonce: UUID = .init()) -> String { \"\\(id)\" }")
+        #expect(inferrer.refutation(for: function) == .refutingDefaultArgument(
+            parameter: "nonce", cause: .nondeterministicMarker("UUID")
+        ))
+    }
+
+    /// The type is judged only for the parameter whose default has the implicit member, and
+    /// only then. A default with its base written says what it reads, and a type taken without
+    /// a default is the injection seam.
+    @Test("a parameter type is not judged without an implicit member in its own default", arguments: [
+        "func stamp(_ id: Int, order: SortOrder = .forward, at moment: Date) -> String { \"\\(id)\" }",
+        "func stamp(_ id: Int, since start: Date = Self.epoch) -> String { \"\\(id)\" }",
+        "func log(_ line: String, to handle: FileHandle = Self.handle) -> Int { line.count }"
+    ])
+    func typeWithoutImplicitMemberStaysPure(source: String) throws {
+        #expect(inferrer.verdict(for: try firstFunction(in: source)) == .pure, "\(source)")
+    }
+
     // MARK: - The controls
 
     /// **The control that makes the fix a fix.** A marker in a parameter *type* is

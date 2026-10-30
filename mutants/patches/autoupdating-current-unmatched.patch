@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/PurityInferrer.swift b/Sources/SwiftEffectInference/PurityInferrer.swift
+index e379c2e..d9b73a3 100644
+--- a/Sources/SwiftEffectInference/PurityInferrer.swift
++++ b/Sources/SwiftEffectInference/PurityInferrer.swift
+@@ -208,7 +208,7 @@ public struct PurityInferrer: Sendable {
+     /// settings as they change. It is the default of every Foundation format style, so a default
+     /// argument often spells it base-less: `locale: Locale = .autoupdatingCurrent`. No other type
+     /// declares the name.
+-    private static let propertyMarkers: Set<String> = ["timeIntervalSinceNow", "autoupdatingCurrent"]
++    private static let propertyMarkers: Set<String> = ["timeIntervalSinceNow"]
+ 
+     /// Types whose static `current` reads the user's settings, beside the `Locale` and `TimeZone`
+     /// the classifier knows. `Calendar.current` carries the process's time zone and the locale's

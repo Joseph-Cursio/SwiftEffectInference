@@ -7,7 +7,8 @@ import Testing
 /// matched as code. `"Date"` refuted a function that only returns a column title, and
 /// `rows.map(\.random)` one that only reads each row's own `random`. Its doc already said what it
 /// meant — "matched by bare-identifier token" — and now it does: an identifier, and not a key
-/// path's component, which names a property where no marker is one.
+/// path's component, which names a property. Most markers are not properties. The few that are,
+/// `timeIntervalSinceNow` among them, are matched there too.
 ///
 /// Found by a sweep of the three repositories for code that took a key path's component for a
 /// reference. The same quirk refuted every construction of a SwiftUI view with
@@ -35,7 +36,7 @@ struct MarkerPositionTests {
         #expect(try verdict(source) == .pure, "\(source)")
     }
 
-    @Test("a key path's component is not a marker", arguments: [
+    @Test("a key path's component is not a marker unless the marker is a property", arguments: [
         "func f(_ rows: [Row]) -> [Int] { rows.map(\\.random) }",
         "func f(_ rows: [Row]) -> [Bool] { rows.map(\\.print) }",
         "func f(_ rows: [Row]) -> [Int] { rows.map(\\.shuffled.count) }"

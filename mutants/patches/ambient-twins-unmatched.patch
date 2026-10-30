@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/PurityInferrer.swift b/Sources/SwiftEffectInference/PurityInferrer.swift
+index e379c2e..ce4cf7c 100644
+--- a/Sources/SwiftEffectInference/PurityInferrer.swift
++++ b/Sources/SwiftEffectInference/PurityInferrer.swift
+@@ -219,7 +219,7 @@ public struct PurityInferrer: Sendable {
+     /// nondeterminism rule reports the classifier's ambient kind, and that rule's scope is
+     /// declared rather than inherited: a classifier entry would widen it as a side effect. This
+     /// oracle over-refutes by design, so the reading can live here alone.
+-    private static let ambientCurrentTypes: Set<String> = ["Calendar", "NSCalendar", "NSLocale"]
++    private static let ambientCurrentTypes: Set<String> = ["Calendar"]
+ 
+     /// Types whose initializer without arguments makes a value the inputs do not determine, beside
+     /// the `Date()` and `UUID()` the token and the classifier know. `DateInterval()` starts now, and

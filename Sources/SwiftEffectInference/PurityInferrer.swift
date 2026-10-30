@@ -187,11 +187,70 @@ public struct PurityInferrer: Sendable {
     /// `gettimeofday()`, `Locale.current` and `TimeZone.current` all reached
     /// **`.pure`** — seven sources this module's own classifier already knew
     /// about, waved through by this module's own purity oracle.
-    private static let nondeterministicMarkers: Set<String> = [
+    private static let nondeterministicMarkers: Set<String> = Set([
         "arc4random", "arc4random_uniform", "drand48", "CFAbsoluteTimeGetCurrent",
         "random", "randomElement", "shuffled",
-        "Date", "UUID"
+        "Date", "UUID",
+        // Compare against the current instant even when the calendar is handed in.
+        "isDateInToday", "isDateInYesterday", "isDateInTomorrow"
+    ]).union(propertyMarkers)
+
+    /// Nondeterminism markers that are **properties**, so a key path reads them
+    /// as well as a member access does: `ds.map(\.timeIntervalSinceNow)`.
+    ///
+    /// `due.timeIntervalSinceNow` reads the clock, and is the everyday spelling
+    /// of "is this overdue". Nothing matched it: the name is no marker, and the
+    /// classifier knows `Date(timeIntervalSinceNow:)` only as an initializer. A
+    /// body that also spelled `Date` was refuted for the token, and one that
+    /// took its `Date` from a parameter or a property was `.pure`.
+    ///
+    /// `autoupdatingCurrent` is the `Locale`, `TimeZone` or `Calendar` that follows the user's
+    /// settings as they change. It is the default of every Foundation format style, so a default
+    /// argument often spells it base-less: `locale: Locale = .autoupdatingCurrent`. No other type
+    /// declares the name.
+    private static let propertyMarkers: Set<String> = ["timeIntervalSinceNow", "autoupdatingCurrent"]
+
+    /// Types whose static `current` reads the user's settings, beside the `Locale` and `TimeZone`
+    /// the classifier knows. `Calendar.current` carries the process's time zone and the locale's
+    /// calendar, so the year, the start of a day and the first weekday all move with them.
+    /// `NSCalendar` and `NSLocale` are the Objective-C twins.
+    ///
+    /// Kept here rather than in `NondeterminismSources`. SwiftProjectLint's non-injected
+    /// nondeterminism rule reports the classifier's ambient kind, and that rule's scope is
+    /// declared rather than inherited: a classifier entry would widen it as a side effect. This
+    /// oracle over-refutes by design, so the reading can live here alone.
+    private static let ambientCurrentTypes: Set<String> = ["Calendar", "NSCalendar", "NSLocale"]
+
+    /// Types whose initializer without arguments makes a value the inputs do not determine, beside
+    /// the `Date()` and `UUID()` the token and the classifier know. `DateInterval()` starts now, and
+    /// `NSDate()` and `NSUUID()` are the Objective-C twins. Their other initializers take the value
+    /// or the instant as an argument, and `NSDate(timeIntervalSinceNow:)` is caught by its label, so
+    /// these are matched only as a construction without arguments: `NSUUID(uuidString:)`,
+    /// `NSDate.self` and `x as NSDate` read nothing.
+    private static let freshConstructions: Set<String> = ["DateInterval", "NSDate", "NSUUID"]
+
+    /// Members that ask about now when they are given no instant: a time zone's offset, its
+    /// daylight-saving state and its next transition. Each has a form that takes the instant,
+    /// `secondsFromGMT(for:)` and `nextDaylightSavingTimeTransition(after:)` among them, and that
+    /// form reads no clock. So these match only when read as a property or called without
+    /// arguments.
+    private static let nowByDefaultMembers: Set<String> = [
+        "secondsFromGMT", "isDaylightSavingTime", "daylightSavingTimeOffset", "nextDaylightSavingTimeTransition"
     ]
+
+    /// Members that read a clock when written **without a base**: `base < .now`,
+    /// `deadline < .now()`. Every library type with a static `now` reads a clock
+    /// through it: `Date`, `DispatchTime`, `DispatchWallTime`, and the
+    /// `Instant` of `ContinuousClock` and `SuspendingClock`. The classifier
+    /// matches `Date.now` only with its base written, and a contextual type
+    /// supplies the base without spelling it.
+    ///
+    /// Matched only as a base-less member. `now` alone is a name, most often the
+    /// parameter that carries an injected instant, and `clock.now` reads a clock
+    /// the caller handed in, which is the injection seam. A package type of its
+    /// own with a `now` member is refuted along with the library's, which is the
+    /// sound direction.
+    private static let baseLessNondeterministicMarkers: Set<String> = ["now"]
 
     /// Returns `.pure` when `function` is referentially transparent — its
     /// signature is synchronous and non-throwing, neither its body nor any
@@ -483,6 +542,18 @@ public struct PurityInferrer: Sendable {
     /// refute exactly the code this inferrer should be rewarding. So the walk
     /// starts at `parameter.defaultValue?.value` and nowhere else.
     ///
+    /// ## Except where the default names nothing
+    ///
+    /// `at: Date = .init()` is `Date()`, and the default says so nowhere: `.init()`
+    /// names no type, and the classifier matches `Date()` only with its callee
+    /// written. (`.now` is a marker of its own.) An implicit member's type is spelled in the parameter's type and
+    /// nowhere else, so a default with one is judged with that type: `Date`,
+    /// `UUID` and `FileHandle` refute there as they would in front of the member,
+    /// and each member is judged again with the type in front of it, so
+    /// `calendar: Calendar = .current` is `Calendar.current`.
+    /// A parameter whose own default has no implicit member keeps the rule above,
+    /// and so does every other parameter of the same function.
+    ///
     /// ## Totality travels with the markers
     ///
     /// `!isTotal` is checked here for the same reason it is checked on the body: a
@@ -503,11 +574,28 @@ public struct PurityInferrer: Sendable {
     private func refutingDefaultArgument(_ signature: FunctionSignatureSyntax) -> PurityRefutation? {
         for parameter in signature.parameterClause.parameters {
             guard let defaultValue = parameter.defaultValue?.value else { continue }
-            guard let cause = bodyRefutation(Syntax(defaultValue)) else { continue }
+            guard let cause = bodyRefutation(Syntax(defaultValue)) ?? typeRefutation(of: parameter) else {
+                continue
+            }
             let name = parameter.secondName?.text ?? parameter.firstName.text
             return .refutingDefaultArgument(parameter: name, cause: cause)
         }
         return nil
+    }
+
+    /// The parameter's type, judged when its default has an implicit member, which names its type
+    /// only there. A closure's members count too: the closure runs when the body calls it.
+    ///
+    /// The type's own markers refute, and so does each implicit member judged with the type
+    /// written in front of it, as a construction's default is: `calendar: Calendar = .current` is
+    /// `Calendar.current`, which no token of the type says.
+    private func typeRefutation(of parameter: FunctionParameterSyntax) -> PurityRefutation? {
+        guard let defaultValue = parameter.defaultValue?.value else { return nil }
+        let members = ImplicitMemberChecker()
+        members.walk(defaultValue)
+        guard members.found else { return nil }
+        return refutingMarker(in: Syntax(parameter.type))
+            ?? RawDeclaration.judge(defaultValue, declaredAs: parameter.type, with: self, facts: constructionFacts)
     }
 
     /// Any I/O, logging, persistence, clock or randomness marker anywhere in
@@ -515,7 +603,7 @@ public struct PurityInferrer: Sendable {
     /// nondeterminism classifier.
     ///
     /// Two passes because they catch different things and neither subsumes the
-    /// other. The token scan is broad and shape-blind; `NondeterminismSources`
+    /// other. The token scan is broad and cannot read argument labels; `NondeterminismSources`
     /// is narrow and shape-aware, and knows about the monotonic clocks, the
     /// clock-acquisition types, `Task.sleep` and the ambient-environment types
     /// that no token in the set names. Running both keeps every deliberate
@@ -524,7 +612,7 @@ public struct PurityInferrer: Sendable {
     ///
     /// The two token sets are reported as different cases even though they refute
     /// alike, because they carry different confidence: the nondeterminism set is
-    /// deliberately shape-blind and refutes `Date(timeIntervalSince1970:)` along
+    /// deliberately blind to argument labels and refutes `Date(timeIntervalSince1970:)` along
     /// with `Date()`, while a `.nondeterminismSource` came from the classifier and
     /// read the argument labels. A consumer writing a diagnostic can say so; one
     /// that only wants a Bool never has to look.
@@ -536,6 +624,24 @@ public struct PurityInferrer: Sendable {
                 return .sideEffectMarker(token.text)
             }
             if Self.nondeterministicMarkers.contains(token.text), Self.isMarkerPosition(token) {
+                return .nondeterministicMarker(token.text)
+            }
+            if Self.baseLessNondeterministicMarkers.contains(token.text), Self.isBaseLessMember(token) {
+                return .nondeterministicMarker("." + token.text)
+            }
+            if let type = Self.ambientCurrentType(of: token) {
+                return .nondeterministicMarker(type + ".current")
+            }
+            if Self.isFreshConstruction(token) {
+                return .nondeterministicMarker(token.text + "()")
+            }
+            if token.text == "now", Self.isBridgedNow(token) {
+                return .nondeterministicMarker("NSDate.now")
+            }
+            if Self.readsNowByDefault(token) {
+                return .nondeterministicMarker(token.text)
+            }
+            if Self.isAmbientFormatting(token) {
                 return .nondeterministicMarker(token.text)
             }
             // A pre-filter, never a match: the fourth pass below matches only constructions.
@@ -553,22 +659,119 @@ public struct PurityInferrer: Sendable {
         return constructionFacts.refutation(constructingIn: syntax)
     }
 
-    /// Whether `token` is where a marker can be: an identifier, and not a key path's component.
+    /// Whether `token` is where a marker can be: an identifier, and not a key path's component
+    /// unless the marker is a property.
     ///
     /// The text of a string literal is not code: `"Date"` and `@AppStorage("shuffled")` name
     /// nothing. A key path's component names a property, read when the key path is applied —
-    /// `rows.map(\.random)` reads each row's own `random` — and **no marker is a property**: each
-    /// names a type, a free function, a method or an argument label, none of which a key path can
-    /// name. A marker that is a property would have to be matched here too. The root is still
-    /// read: `\Date.timeIntervalSince1970` mentions `Date`. A member name is still matched,
+    /// `rows.map(\.random)` reads each row's own `random` — and most markers are not properties:
+    /// they name a type, a free function, a method or an argument label, none of which a key path
+    /// can name. The `propertyMarkers` are the exception, and are matched there too:
+    /// `ds.map(\.timeIntervalSinceNow)` reads the clock once per date. The root is still read:
+    /// `\Date.timeIntervalSince1970` mentions `Date`. A member name is still matched,
     /// `rows.map { $0.random }` included, because a member can be a static method: `Int.random`.
     static func isMarkerPosition(_ token: TokenSyntax) -> Bool {
         guard case .identifier = token.tokenKind else { return false }
         if let reference = token.parent?.as(DeclReferenceExprSyntax.self),
            reference.parent?.is(KeyPathPropertyComponentSyntax.self) == true {
-            return false
+            return propertyMarkers.contains(token.text)
         }
         return true
+    }
+
+    /// Whether `token` is the name of a member written without a base: the `now` of `.now`.
+    static func isBaseLessMember(_ token: TokenSyntax) -> Bool {
+        guard let reference = token.parent?.as(DeclReferenceExprSyntax.self),
+              let member = reference.parent?.as(MemberAccessExprSyntax.self) else { return false }
+        return member.base == nil && member.declName.id == reference.id
+    }
+
+    /// The type whose `current` `token` names, when it is one of the `ambientCurrentTypes`:
+    /// `Calendar` for the `current` of `Calendar.current`.
+    static func ambientCurrentType(of token: TokenSyntax) -> String? {
+        guard token.text == "current",
+              let reference = token.parent?.as(DeclReferenceExprSyntax.self),
+              let member = reference.parent?.as(MemberAccessExprSyntax.self),
+              member.declName.id == reference.id,
+              let base = member.base?.as(DeclReferenceExprSyntax.self),
+              ambientCurrentTypes.contains(base.baseName.text) else { return nil }
+        return base.baseName.text
+    }
+
+    /// Whether `token` is one of the `freshConstructions` called without arguments, as
+    /// `DateInterval()` or `DateInterval.init()`.
+    static func isFreshConstruction(_ token: TokenSyntax) -> Bool {
+        guard freshConstructions.contains(token.text),
+              let reference = token.parent?.as(DeclReferenceExprSyntax.self) else { return false }
+        var callee = Syntax(reference)
+        if let member = reference.parent?.as(MemberAccessExprSyntax.self), member.base?.id == reference.id,
+           member.declName.baseName.tokenKind == .keyword(.`init`) {
+            callee = Syntax(member)
+        }
+        guard let call = callee.parent?.as(FunctionCallExprSyntax.self), call.calledExpression.id == callee.id else {
+            return false
+        }
+        return call.arguments.isEmpty && call.trailingClosure == nil
+    }
+
+    /// Whether `token` is the `now` of `NSDate.now`, which the classifier does not know.
+    static func isBridgedNow(_ token: TokenSyntax) -> Bool {
+        guard let reference = token.parent?.as(DeclReferenceExprSyntax.self),
+              let member = reference.parent?.as(MemberAccessExprSyntax.self),
+              member.declName.id == reference.id,
+              let base = member.base?.as(DeclReferenceExprSyntax.self) else { return false }
+        return base.baseName.text == "NSDate"
+    }
+
+    /// Whether `token` is one of the `nowByDefaultMembers` given no instant: read as a property,
+    /// a key path's included, or called without arguments.
+    static func readsNowByDefault(_ token: TokenSyntax) -> Bool {
+        guard nowByDefaultMembers.contains(token.text),
+              let reference = token.parent?.as(DeclReferenceExprSyntax.self) else { return false }
+        if reference.parent?.is(KeyPathPropertyComponentSyntax.self) == true { return true }
+        guard let member = reference.parent?.as(MemberAccessExprSyntax.self),
+              member.declName.id == reference.id else { return false }
+        guard let call = member.parent?.as(FunctionCallExprSyntax.self), call.calledExpression.id == member.id else {
+            return true
+        }
+        return call.arguments.isEmpty && call.trailingClosure == nil
+    }
+
+    /// Whether `token` names a `formatted(…)` call that formats with the user's locale, time zone
+    /// or calendar: `d.formatted()`, `n.formatted(.number)`, `t.formatted(.units())`.
+    ///
+    /// Foundation declares `formatted` on `Date`, the integer and floating-point types, `Decimal`,
+    /// `Duration`, a range of dates, string sequences, `Measurement` and `PersonNameComponents`.
+    /// Each formats with the ambient settings unless locale, time zone and calendar are all
+    /// pinned, and a relative style reads the clock too. The receiver's type is not visible here,
+    /// so any called `formatted` with a receiver refutes, except two forms known to read nothing:
+    /// an `.iso8601` style, which is always GMT and never localized, and swift-syntax's
+    /// `formatted(using:)`, which lays out source text. A package's own deterministic `formatted`
+    /// or style is refuted along with Foundation's, and so is swift-syntax's `formatted()` with
+    /// its default. That is the sound direction.
+    ///
+    /// A base-less `.formatted(formatter)` is a coding strategy's case, so it does not match. Nor
+    /// does a `formatted` that is not called, which is most often some other type's property. A
+    /// reference to Foundation's own method, `let render: () -> String = d.formatted`, is missed.
+    static func isAmbientFormatting(_ token: TokenSyntax) -> Bool {
+        guard token.text == "formatted",
+              let reference = token.parent?.as(DeclReferenceExprSyntax.self),
+              let member = reference.parent?.as(MemberAccessExprSyntax.self),
+              member.base != nil, member.declName.id == reference.id,
+              let call = member.parent?.as(FunctionCallExprSyntax.self),
+              call.calledExpression.id == member.id else { return false }
+        if call.arguments.contains(where: { $0.label?.text == "using" }) { return false }
+        guard call.arguments.count == 1, let style = call.arguments.first, style.label == nil else { return true }
+        return baseLessRoot(of: style.expression) != "iso8601"
+    }
+
+    /// The member at the bottom of a chain when it is written without a base: `iso8601` for
+    /// `.iso8601.year().month()`.
+    private static func baseLessRoot(of expression: ExprSyntax) -> String? {
+        if let call = expression.as(FunctionCallExprSyntax.self) { return baseLessRoot(of: call.calledExpression) }
+        guard let member = expression.as(MemberAccessExprSyntax.self) else { return nil }
+        guard let base = member.base else { return member.declName.baseName.text }
+        return baseLessRoot(of: base)
     }
 
     /// What constructing a type runs, judged on the **transparency half only** — markers, the
@@ -679,6 +882,18 @@ private final class FileReadChecker: SourceAccurateSyntaxVisitor {
         else { return .visitChildren }
         if fileRead == nil { fileRead = "\(callee.baseName.text)(contentsOf:)" }
         return .visitChildren
+    }
+}
+
+/// Detects a base-less member — `.now`, `.init()`, `.standardError` — which takes its type from
+/// whatever the code around it declares.
+final class ImplicitMemberChecker: SourceAccurateSyntaxVisitor {
+
+    private(set) var found = false
+
+    override func visit(_ node: MemberAccessExprSyntax) -> SyntaxVisitorContinueKind {
+        if node.base == nil { found = true }
+        return found ? .skipChildren : .visitChildren
     }
 }
 

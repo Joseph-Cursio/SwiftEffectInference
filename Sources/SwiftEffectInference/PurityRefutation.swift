@@ -60,11 +60,12 @@ public enum PurityRefutation: Sendable, Equatable {
     /// token. Carries the token as written (`"FileManager"`, `"print"`).
     case sideEffectMarker(String)
 
-    /// A nondeterminism marker appeared as a bare token. Carries the token as
-    /// written (`"Date"`, `"shuffled"`).
+    /// A nondeterminism marker appeared. Carries it as written, a bare token
+    /// (`"Date"`, `"shuffled"`), or, for a shape the token scan matches, in the
+    /// spelling that names it (`".now"`, `"Calendar.current"`, `"DateInterval()"`).
     ///
     /// Distinct from `nondeterminismSource` because the token scan is
-    /// deliberately shape-blind and over-refutes: it cannot tell `Date()` from
+    /// deliberately blind to argument labels and over-refutes: it cannot tell `Date()` from
     /// `Date(timeIntervalSince1970:)`. A consumer that wants to say so — or to
     /// treat this as weaker evidence than the classifier's — needs the two
     /// separated, and a consumer that does not can ignore the distinction.

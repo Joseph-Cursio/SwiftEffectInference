@@ -1,0 +1,12 @@
+diff --git a/Sources/SwiftEffectInference/PurityInferrer.swift b/Sources/SwiftEffectInference/PurityInferrer.swift
+index e379c2e..439a372 100644
+--- a/Sources/SwiftEffectInference/PurityInferrer.swift
++++ b/Sources/SwiftEffectInference/PurityInferrer.swift
+@@ -595,7 +595,6 @@ public struct PurityInferrer: Sendable {
+         members.walk(defaultValue)
+         guard members.found else { return nil }
+         return refutingMarker(in: Syntax(parameter.type))
+-            ?? RawDeclaration.judge(defaultValue, declaredAs: parameter.type, with: self, facts: constructionFacts)
+     }
+ 
+     /// Any I/O, logging, persistence, clock or randomness marker anywhere in

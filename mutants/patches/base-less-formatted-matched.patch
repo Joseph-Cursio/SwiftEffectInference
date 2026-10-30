@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/PurityInferrer.swift b/Sources/SwiftEffectInference/PurityInferrer.swift
+index e379c2e..23d90ad 100644
+--- a/Sources/SwiftEffectInference/PurityInferrer.swift
++++ b/Sources/SwiftEffectInference/PurityInferrer.swift
+@@ -757,7 +757,7 @@ public struct PurityInferrer: Sendable {
+         guard token.text == "formatted",
+               let reference = token.parent?.as(DeclReferenceExprSyntax.self),
+               let member = reference.parent?.as(MemberAccessExprSyntax.self),
+-              member.base != nil, member.declName.id == reference.id,
++              member.declName.id == reference.id,
+               let call = member.parent?.as(FunctionCallExprSyntax.self),
+               call.calledExpression.id == member.id else { return false }
+         if call.arguments.contains(where: { $0.label?.text == "using" }) { return false }
