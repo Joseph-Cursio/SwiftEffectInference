@@ -27,7 +27,7 @@ let package = Package(
         // apple/ → swiftlang/ move); every consumer in the toolchain pins this
         // same spelling, because SwiftPM warns — and will eventually error —
         // when dependency chains reach one identity through different URLs.
-        .package(url: "https://github.com/swiftlang/swift-syntax.git", exact: "602.0.0")
+        .package(url: "https://github.com/swiftlang/swift-syntax.git", exact: "603.0.2")
     ],
     targets: [
         .target(
