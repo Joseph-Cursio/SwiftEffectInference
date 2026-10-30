@@ -181,8 +181,8 @@ struct UnspelledClockPurityTests {
         #expect(refutation == .nondeterministicMarker("timeIntervalSinceNow"))
     }
 
-    /// Only a property marker is matched as a key path's component. The others name types,
-    /// functions and labels, which no key path can name.
+    /// Only a property marker, or a time zone's reader given no instant, is matched as a key
+    /// path's component. The others name types, functions and labels, which no key path can name.
     @Test("a key path's other components are still not markers", arguments: [
         "func f(_ rows: [Row]) -> [Int] { rows.map(\\.random) }",
         "func f(_ ds: [Date]) -> [Double] { ds.map(\\.timeIntervalSince1970) }"

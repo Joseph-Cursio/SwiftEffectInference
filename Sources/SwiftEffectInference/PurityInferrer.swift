@@ -223,9 +223,10 @@ public struct PurityInferrer: Sendable {
 
     /// Types whose initializer without arguments makes a value the inputs do not determine, beside
     /// the `Date()` and `UUID()` the token and the classifier know. `DateInterval()` starts now, and
-    /// `NSDate()` and `NSUUID()` are the Objective-C twins. Every initializer that takes arguments
-    /// names its value or the instant it starts at, so these are matched only as a construction
-    /// without them: `NSUUID(uuidString:)`, `NSDate.self` and `x as NSDate` read nothing.
+    /// `NSDate()` and `NSUUID()` are the Objective-C twins. Their other initializers take the value
+    /// or the instant as an argument, and `NSDate(timeIntervalSinceNow:)` is caught by its label, so
+    /// these are matched only as a construction without arguments: `NSUUID(uuidString:)`,
+    /// `NSDate.self` and `x as NSDate` read nothing.
     private static let freshConstructions: Set<String> = ["DateInterval", "NSDate", "NSUUID"]
 
     /// Members that ask about now when they are given no instant: a time zone's offset, its
@@ -602,7 +603,7 @@ public struct PurityInferrer: Sendable {
     /// nondeterminism classifier.
     ///
     /// Two passes because they catch different things and neither subsumes the
-    /// other. The token scan is broad and shape-blind; `NondeterminismSources`
+    /// other. The token scan is broad and cannot read argument labels; `NondeterminismSources`
     /// is narrow and shape-aware, and knows about the monotonic clocks, the
     /// clock-acquisition types, `Task.sleep` and the ambient-environment types
     /// that no token in the set names. Running both keeps every deliberate
@@ -611,7 +612,7 @@ public struct PurityInferrer: Sendable {
     ///
     /// The two token sets are reported as different cases even though they refute
     /// alike, because they carry different confidence: the nondeterminism set is
-    /// deliberately shape-blind and refutes `Date(timeIntervalSince1970:)` along
+    /// deliberately blind to argument labels and refutes `Date(timeIntervalSince1970:)` along
     /// with `Date()`, while a `.nondeterminismSource` came from the classifier and
     /// read the argument labels. A consumer writing a diagnostic can say so; one
     /// that only wants a Bool never has to look.
@@ -749,8 +750,9 @@ public struct PurityInferrer: Sendable {
     /// or style is refuted along with Foundation's, and so is swift-syntax's `formatted()` with
     /// its default. That is the sound direction.
     ///
-    /// A base-less `.formatted(formatter)` is a coding strategy's case, and a `formatted` that is
-    /// not called is some other type's property, so neither matches.
+    /// A base-less `.formatted(formatter)` is a coding strategy's case, so it does not match. Nor
+    /// does a `formatted` that is not called, which is most often some other type's property. A
+    /// reference to Foundation's own method, `let render: () -> String = d.formatted`, is missed.
     static func isAmbientFormatting(_ token: TokenSyntax) -> Bool {
         guard token.text == "formatted",
               let reference = token.parent?.as(DeclReferenceExprSyntax.self),
