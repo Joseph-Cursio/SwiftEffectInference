@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/PurityInferrer.swift b/Sources/SwiftEffectInference/PurityInferrer.swift
+index e379c2e..0e76bfb 100644
+--- a/Sources/SwiftEffectInference/PurityInferrer.swift
++++ b/Sources/SwiftEffectInference/PurityInferrer.swift
+@@ -250,7 +250,7 @@ public struct PurityInferrer: Sendable {
+     /// the caller handed in, which is the injection seam. A package type of its
+     /// own with a `now` member is refuted along with the library's, which is the
+     /// sound direction.
+-    private static let baseLessNondeterministicMarkers: Set<String> = ["now"]
++    private static let baseLessNondeterministicMarkers: Set<String> = []
+ 
+     /// Returns `.pure` when `function` is referentially transparent — its
+     /// signature is synchronous and non-throwing, neither its body nor any

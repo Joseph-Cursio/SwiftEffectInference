@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/PurityInferrer.swift b/Sources/SwiftEffectInference/PurityInferrer.swift
+index e379c2e..689b4eb 100644
+--- a/Sources/SwiftEffectInference/PurityInferrer.swift
++++ b/Sources/SwiftEffectInference/PurityInferrer.swift
+@@ -641,7 +641,7 @@ public struct PurityInferrer: Sendable {
+             if Self.readsNowByDefault(token) {
+                 return .nondeterministicMarker(token.text)
+             }
+-            if Self.isAmbientFormatting(token) {
++            if false, Self.isAmbientFormatting(token) {
+                 return .nondeterministicMarker(token.text)
+             }
+             // A pre-filter, never a match: the fourth pass below matches only constructions.

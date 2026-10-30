@@ -513,6 +513,182 @@
       "expected": "killed",
       "test": "aliasMetAgainThroughSelfEnds",
       "label": "`Self` starts the aliases seen afresh — `typealias F = Self.E` in a protocol a type named `F` conforms to reads `F.E` as `Self.E.E`, and so on, until the stack runs out"
+    },
+    {
+      "id": "default-type-never-judged",
+      "patch": "patches/default-type-never-judged.patch",
+      "shape": "purity-unspelled",
+      "expected": "killed",
+      "test": "implicitMemberInDefaultArgument",
+      "label": "a default's implicit member is never judged with its parameter's type -- `at: Date = .init()` is pure again"
+    },
+    {
+      "id": "default-type-always-judged",
+      "patch": "patches/default-type-always-judged.patch",
+      "shape": "purity-unspelled",
+      "expected": "killed",
+      "test": "typeWithoutImplicitMemberStaysPure",
+      "label": "a parameter's type is judged whenever it has a default -- `to handle: FileHandle = Self.handle` refutes on a type its default never reads through"
+    },
+    {
+      "id": "default-member-not-rebuilt",
+      "patch": "patches/default-member-not-rebuilt.patch",
+      "shape": "purity-unspelled",
+      "expected": "killed",
+      "test": "currentDefault",
+      "label": "a default's implicit member is never judged with its parameter's type in front -- `calendar: Calendar = .current` is pure"
+    },
+    {
+      "id": "implicit-member-in-closure-default-ignored",
+      "patch": "patches/implicit-member-in-closure-default-ignored.patch",
+      "shape": "purity-unspelled",
+      "expected": "killed",
+      "test": "implicitMemberInDefaultArgument",
+      "label": "a closure default's implicit members are not looked for -- `clock: () -> Date = { .init() }` is pure, though the body calls it"
+    },
+    {
+      "id": "base-less-now-unmatched",
+      "patch": "patches/base-less-now-unmatched.patch",
+      "shape": "purity-unspelled",
+      "expected": "killed",
+      "test": "baseLessNow",
+      "label": "a base-less `.now` is no marker -- `due < .now` is pure"
+    },
+    {
+      "id": "now-matched-with-a-base",
+      "patch": "patches/now-matched-with-a-base.patch",
+      "shape": "purity-unspelled",
+      "expected": "killed",
+      "test": "nowThatIsNotBaseLess",
+      "label": "`now` is matched with a base too -- an injected `clock.now` refutes"
+    },
+    {
+      "id": "time-interval-since-now-unmatched",
+      "patch": "patches/time-interval-since-now-unmatched.patch",
+      "shape": "purity-unspelled",
+      "expected": "killed",
+      "test": "timeIntervalSinceNow",
+      "label": "`timeIntervalSinceNow` is no marker -- `due.timeIntervalSinceNow < 0` is pure"
+    },
+    {
+      "id": "property-marker-not-read-in-key-path",
+      "patch": "patches/property-marker-not-read-in-key-path.patch",
+      "shape": "purity-unspelled",
+      "expected": "killed",
+      "test": "timeIntervalSinceNow",
+      "label": "a key path's component is never a marker -- `ds.map(\\.timeIntervalSinceNow)` is pure"
+    },
+    {
+      "id": "calendar-current-unmatched",
+      "patch": "patches/calendar-current-unmatched.patch",
+      "shape": "purity-unspelled",
+      "expected": "killed",
+      "test": "calendarCurrent",
+      "label": "`Calendar.current` is no marker -- the year of a date is read in the user's calendar unseen"
+    },
+    {
+      "id": "ambient-twins-unmatched",
+      "patch": "patches/ambient-twins-unmatched.patch",
+      "shape": "purity-unspelled",
+      "expected": "killed",
+      "test": "calendarCurrent",
+      "label": "only `Calendar` has an ambient `current` -- `NSCalendar.current` and `NSLocale.current` are pure"
+    },
+    {
+      "id": "current-matched-on-any-base",
+      "patch": "patches/current-matched-on-any-base.patch",
+      "shape": "purity-unspelled",
+      "expected": "killed",
+      "test": "calendarHandedIn",
+      "label": "any `x.current` refutes -- `config.current.level` is read as an ambient setting"
+    },
+    {
+      "id": "autoupdating-current-unmatched",
+      "patch": "patches/autoupdating-current-unmatched.patch",
+      "shape": "purity-unspelled",
+      "expected": "killed",
+      "test": "autoupdatingCurrent",
+      "label": "`autoupdatingCurrent` is no marker -- `Locale.autoupdatingCurrent.identifier` is pure"
+    },
+    {
+      "id": "formatted-unmatched",
+      "patch": "patches/formatted-unmatched.patch",
+      "shape": "purity-unspelled",
+      "expected": "killed",
+      "test": "formatted",
+      "label": "`formatted(…)` is no marker -- `n.formatted()` is pure in every locale"
+    },
+    {
+      "id": "syntax-formatting-not-exempt",
+      "patch": "patches/syntax-formatting-not-exempt.patch",
+      "shape": "purity-unspelled",
+      "expected": "killed",
+      "test": "formattedThatIsNotAmbient",
+      "label": "swift-syntax's `formatted(using:)` refutes -- laying out source text is read as a locale read"
+    },
+    {
+      "id": "iso8601-not-exempt",
+      "patch": "patches/iso8601-not-exempt.patch",
+      "shape": "purity-unspelled",
+      "expected": "killed",
+      "test": "formattedThatIsNotAmbient",
+      "label": "an `.iso8601` style refutes -- a format that is always GMT and never localized is read as a locale read"
+    },
+    {
+      "id": "base-less-formatted-matched",
+      "patch": "patches/base-less-formatted-matched.patch",
+      "shape": "purity-unspelled",
+      "expected": "killed",
+      "test": "formattedThatIsNotAmbient",
+      "label": "a base-less `.formatted(f)` refutes -- a coding strategy's case is read as a format call"
+    },
+    {
+      "id": "relative-to-now-unmatched",
+      "patch": "patches/relative-to-now-unmatched.patch",
+      "shape": "purity-unspelled",
+      "expected": "killed",
+      "test": "relativeToNow",
+      "label": "`isDateInToday` and its siblings are no markers -- an injected calendar asked about today reads no clock"
+    },
+    {
+      "id": "fresh-construction-unmatched",
+      "patch": "patches/fresh-construction-unmatched.patch",
+      "shape": "purity-unspelled",
+      "expected": "killed",
+      "test": "relativeToNow",
+      "label": "a construction without arguments is no marker -- `DateInterval()` starts nowhere"
+    },
+    {
+      "id": "fresh-construction-takes-arguments",
+      "patch": "patches/fresh-construction-takes-arguments.patch",
+      "shape": "purity-unspelled",
+      "expected": "killed",
+      "test": "notRelativeToNow",
+      "label": "a construction with arguments refutes too -- `DateInterval(start:end:)` is read as starting now"
+    },
+    {
+      "id": "bridged-now-unmatched",
+      "patch": "patches/bridged-now-unmatched.patch",
+      "shape": "purity-unspelled",
+      "expected": "killed",
+      "test": "bridgedTwins",
+      "label": "`NSDate.now` is no marker -- the Objective-C spelling of `Date.now` is pure"
+    },
+    {
+      "id": "now-by-default-unmatched",
+      "patch": "patches/now-by-default-unmatched.patch",
+      "shape": "purity-unspelled",
+      "expected": "killed",
+      "test": "timeZoneReadsNow",
+      "label": "a time zone's reader given no instant is no marker -- `zone.secondsFromGMT()` is pure"
+    },
+    {
+      "id": "now-by-default-given-an-instant",
+      "patch": "patches/now-by-default-given-an-instant.patch",
+      "shape": "purity-unspelled",
+      "expected": "killed",
+      "test": "timeZoneReadsAnInstant",
+      "label": "a time zone's reader given an instant refutes too -- `secondsFromGMT(for: d)` is read as asking about now"
     }
   ]
 }

@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/PurityInferrer.swift b/Sources/SwiftEffectInference/PurityInferrer.swift
+index e379c2e..30249a7 100644
+--- a/Sources/SwiftEffectInference/PurityInferrer.swift
++++ b/Sources/SwiftEffectInference/PurityInferrer.swift
+@@ -891,6 +891,8 @@ final class ImplicitMemberChecker: SourceAccurateSyntaxVisitor {
+ 
+     private(set) var found = false
+ 
++    override func visit(_ node: ClosureExprSyntax) -> SyntaxVisitorContinueKind { .skipChildren }
++
+     override func visit(_ node: MemberAccessExprSyntax) -> SyntaxVisitorContinueKind {
+         if node.base == nil { found = true }
+         return found ? .skipChildren : .visitChildren

@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/PurityInferrer.swift b/Sources/SwiftEffectInference/PurityInferrer.swift
+index e379c2e..27cb981 100644
+--- a/Sources/SwiftEffectInference/PurityInferrer.swift
++++ b/Sources/SwiftEffectInference/PurityInferrer.swift
+@@ -674,7 +674,7 @@ public struct PurityInferrer: Sendable {
+         guard case .identifier = token.tokenKind else { return false }
+         if let reference = token.parent?.as(DeclReferenceExprSyntax.self),
+            reference.parent?.is(KeyPathPropertyComponentSyntax.self) == true {
+-            return propertyMarkers.contains(token.text)
++            return false
+         }
+         return true
+     }

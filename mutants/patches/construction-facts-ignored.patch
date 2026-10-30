@@ -1,8 +1,8 @@
 diff --git a/Sources/SwiftEffectInference/PurityInferrer.swift b/Sources/SwiftEffectInference/PurityInferrer.swift
-index 7109863..e7ee807 100644
+index e379c2e..fad8ffa 100644
 --- a/Sources/SwiftEffectInference/PurityInferrer.swift
 +++ b/Sources/SwiftEffectInference/PurityInferrer.swift
-@@ -550,7 +550,7 @@ public struct PurityInferrer: Sendable {
+@@ -656,7 +656,7 @@ public struct PurityInferrer: Sendable {
          checker.walk(syntax)
          if let source = checker.source { return .nondeterminismSource(source) }
          guard mentionsConstructible else { return nil }
@@ -10,4 +10,4 @@ index 7109863..e7ee807 100644
 +        return nil
      }
  
-     /// Whether `token` is where a marker can be: an identifier, and not a key path's component.
+     /// Whether `token` is where a marker can be: an identifier, and not a key path's component

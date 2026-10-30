@@ -1,0 +1,12 @@
+diff --git a/Sources/SwiftEffectInference/PurityInferrer.swift b/Sources/SwiftEffectInference/PurityInferrer.swift
+index e379c2e..4b076b7 100644
+--- a/Sources/SwiftEffectInference/PurityInferrer.swift
++++ b/Sources/SwiftEffectInference/PurityInferrer.swift
+@@ -593,7 +593,6 @@ public struct PurityInferrer: Sendable {
+         guard let defaultValue = parameter.defaultValue?.value else { return nil }
+         let members = ImplicitMemberChecker()
+         members.walk(defaultValue)
+-        guard members.found else { return nil }
+         return refutingMarker(in: Syntax(parameter.type))
+             ?? RawDeclaration.judge(defaultValue, declaredAs: parameter.type, with: self, facts: constructionFacts)
+     }

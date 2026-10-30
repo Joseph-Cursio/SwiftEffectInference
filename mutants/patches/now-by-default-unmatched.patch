@@ -1,0 +1,15 @@
+diff --git a/Sources/SwiftEffectInference/PurityInferrer.swift b/Sources/SwiftEffectInference/PurityInferrer.swift
+index e379c2e..51c3c34 100644
+--- a/Sources/SwiftEffectInference/PurityInferrer.swift
++++ b/Sources/SwiftEffectInference/PurityInferrer.swift
+@@ -234,9 +234,7 @@ public struct PurityInferrer: Sendable {
+     /// `secondsFromGMT(for:)` and `nextDaylightSavingTimeTransition(after:)` among them, and that
+     /// form reads no clock. So these match only when read as a property or called without
+     /// arguments.
+-    private static let nowByDefaultMembers: Set<String> = [
+-        "secondsFromGMT", "isDaylightSavingTime", "daylightSavingTimeOffset", "nextDaylightSavingTimeTransition"
+-    ]
++    private static let nowByDefaultMembers: Set<String> = []
+ 
+     /// Members that read a clock when written **without a base**: `base < .now`,
+     /// `deadline < .now()`. Every library type with a static `now` reads a clock

@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/PurityInferrer.swift b/Sources/SwiftEffectInference/PurityInferrer.swift
+index e379c2e..8a8ab48 100644
+--- a/Sources/SwiftEffectInference/PurityInferrer.swift
++++ b/Sources/SwiftEffectInference/PurityInferrer.swift
+@@ -227,7 +227,7 @@ public struct PurityInferrer: Sendable {
+     /// or the instant as an argument, and `NSDate(timeIntervalSinceNow:)` is caught by its label, so
+     /// these are matched only as a construction without arguments: `NSUUID(uuidString:)`,
+     /// `NSDate.self` and `x as NSDate` read nothing.
+-    private static let freshConstructions: Set<String> = ["DateInterval", "NSDate", "NSUUID"]
++    private static let freshConstructions: Set<String> = []
+ 
+     /// Members that ask about now when they are given no instant: a time zone's offset, its
+     /// daylight-saving state and its next transition. Each has a form that takes the instant,
