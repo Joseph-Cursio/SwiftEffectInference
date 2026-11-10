@@ -1,8 +1,7 @@
-diff --git a/Sources/SwiftEffectInference/PurityInferrer.swift b/Sources/SwiftEffectInference/PurityInferrer.swift
-index e379c2e..fad8ffa 100644
---- a/Sources/SwiftEffectInference/PurityInferrer.swift
-+++ b/Sources/SwiftEffectInference/PurityInferrer.swift
-@@ -656,7 +656,7 @@ public struct PurityInferrer: Sendable {
+diff --git a/Sources/SwiftEffectInference/PurityInferrer+Markers.swift b/Sources/SwiftEffectInference/PurityInferrer+Markers.swift
+--- a/Sources/SwiftEffectInference/PurityInferrer+Markers.swift
++++ b/Sources/SwiftEffectInference/PurityInferrer+Markers.swift
+@@ -205,7 +205,7 @@
          checker.walk(syntax)
          if let source = checker.source { return .nondeterminismSource(source) }
          guard mentionsConstructible else { return nil }
@@ -10,4 +9,4 @@ index e379c2e..fad8ffa 100644
 +        return nil
      }
  
-     /// Whether `token` is where a marker can be: an identifier, and not a key path's component
+     /// The marker `token` refutes by itself, or `nil`: the token sets, and the shapes the

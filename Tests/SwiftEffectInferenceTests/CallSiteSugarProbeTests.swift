@@ -1,7 +1,7 @@
+@testable import SwiftEffectInference
 import SwiftParser
 import SwiftSyntax
 import Testing
-@testable import SwiftEffectInference
 
 /// Probe: every call-site sugar that makes the written label list differ from the declared one.
 ///
@@ -14,6 +14,7 @@ struct CallSiteSugarProbeTests {
     private static func calls(in tree: SourceFileSyntax) -> [FunctionCallExprSyntax] {
         final class Collector: SyntaxVisitor {
             var found: [FunctionCallExprSyntax] = []
+
             override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
                 found.append(node)
                 return .visitChildren

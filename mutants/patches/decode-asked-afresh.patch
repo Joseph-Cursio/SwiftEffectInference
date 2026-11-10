@@ -1,8 +1,7 @@
-diff --git a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
-index ef66612..4a900fe 100644
---- a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
-+++ b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
-@@ -426,7 +426,6 @@ extension ConstructionFacts {
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Construction.swift b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Construction.swift
+--- a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Construction.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Construction.swift
+@@ -128,7 +128,6 @@
      /// pass can change the answer.
      func decodeRefutation(_ index: Int) -> PurityRefutation? {
          guard let memo = memo.instance else { return memoised().decodeRefutation(index) }

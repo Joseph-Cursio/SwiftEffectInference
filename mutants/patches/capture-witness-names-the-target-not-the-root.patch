@@ -1,8 +1,7 @@
-diff --git a/Sources/SwiftEffectInference/PurityInferrer.swift b/Sources/SwiftEffectInference/PurityInferrer.swift
-index 9e21c10..11f3d1e 100644
---- a/Sources/SwiftEffectInference/PurityInferrer.swift
-+++ b/Sources/SwiftEffectInference/PurityInferrer.swift
-@@ -747,7 +747,7 @@ private final class CaptureMutationChecker: SourceAccurateSyntaxVisitor {
+diff --git a/Sources/SwiftEffectInference/CaptureMutationChecker.swift b/Sources/SwiftEffectInference/CaptureMutationChecker.swift
+--- a/Sources/SwiftEffectInference/CaptureMutationChecker.swift
++++ b/Sources/SwiftEffectInference/CaptureMutationChecker.swift
+@@ -81,7 +81,7 @@
      private func refuteIfCaptured(_ target: ExprSyntax) {
          guard let root = rootName(of: target) else { return }
          guard !locallyBound.contains(root), !Self.isShorthandParameter(root) else { return }

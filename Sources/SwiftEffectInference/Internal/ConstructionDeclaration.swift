@@ -96,96 +96,6 @@ struct ConstructionInitializer: Sendable, Equatable {
     }
 }
 
-/// One declared type and the facts about constructing it.
-struct ConstructionDeclaration: Sendable, Equatable {
-    let qualifiedName: String
-    let bareName: String
-    let kind: ConstructionKind
-    /// A class nothing may subclass — `final`, or an actor.
-    let isFinal: Bool
-    let isPropertyWrapper: Bool
-    /// The declaration itself, so its inheritance clause resolves from where it is written.
-    let site: Syntax
-    /// Every type named in an inheritance clause, its own and its extensions', with protocol
-    /// compositions spelled out.
-    var inheritedNames: [String]
-    /// Refutes every construction, whatever initializer it reaches.
-    var unconditional: PurityRefutation?
-    /// The struct `var` defaults — conditional, because the memberwise initializer takes them as
-    /// arguments.
-    var conditionalStoredDefault: PurityRefutation?
-    var initializers: [ConstructionInitializer]
-
-    /// The witness for constructing it, reaching `cause` through `step`.
-    func refuted(via step: PurityRefutation.ConstructionStep, _ cause: PurityRefutation) -> PurityRefutation {
-        .refutingConstruction(type: qualifiedName, via: step, cause: cause)
-    }
-
-    /// The scope it is declared in: `A.B` for `A.B.C`, `""` at the top level.
-    var parentScope: String {
-        qualifiedName.split(separator: ".").dropLast().joined(separator: ".")
-    }
-
-    /// A class that declares no designated initializer of its own inherits its superclass's.
-    var inheritsDesignatedInitializers: Bool {
-        kind == .classOrActor && !initializers.contains { $0.origin == .declared && !$0.isConvenience }
-    }
-
-    /// The initializers `call` fits. Swift prefers a type's own initializer to a protocol
-    /// extension's with the same labels, so that one is set aside.
-    func accepting(_ call: CallShape) -> [ConstructionInitializer] {
-        let fitting = initializers.filter { call.reaches($0.parameters) }
-        // The shape guess asks this of every type: with nothing to set aside, build no set.
-        guard fitting.contains(where: { $0.origin == .protocolExtension }) else { return fitting }
-        let own = fitting.filter { $0.origin != .protocolExtension }
-        let ownLabels = Set(own.map { $0.parameters.map(\.label) })
-        return own + fitting.filter {
-            $0.origin == .protocolExtension && !ownLabels.contains($0.parameters.map(\.label))
-        }
-    }
-
-    /// Anything any construction path can run — the answer when the path is unknown.
-    var anyRefutation: PurityRefutation? {
-        unconditional ?? conditionalStoredDefault ?? initializers.lazy.compactMap(\.anyRefutation).first
-    }
-
-    /// How many places a refutation can land — what bounds the fixpoint.
-    var slotCount: Int {
-        2 + initializers.reduce(0) { $0 + 2 + $1.omittedDefaultRefutations.count }
-    }
-
-    /// How many of them have one.
-    var refutedSlotCount: Int {
-        [unconditional, conditionalStoredDefault].compactMap { $0 }.count
-            + initializers.reduce(0) {
-                $0 + [$1.bodyRefutation, $1.storedDefaultRefutation].compactMap { $0 }.count
-                    + $1.omittedDefaultRefutations.count
-            }
-    }
-
-    /// `self`, keeping every witness `earlier` already found — so a witness, once assigned, never
-    /// changes, and a recursive construction converges instead of nesting one level deeper on
-    /// every pass.
-    func keeping(_ earlier: ConstructionDeclaration) -> ConstructionDeclaration {
-        var merged = self
-        merged.unconditional = earlier.unconditional ?? unconditional
-        merged.conditionalStoredDefault = earlier.conditionalStoredDefault ?? conditionalStoredDefault
-        for index in merged.initializers.indices where index < earlier.initializers.count {
-            let old = earlier.initializers[index]
-            merged.initializers[index].bodyRefutation = old.bodyRefutation ?? merged.initializers[index].bodyRefutation
-            merged.initializers[index].storedDefaultRefutation =
-                old.storedDefaultRefutation ?? merged.initializers[index].storedDefaultRefutation
-            let kept = Dictionary(
-                old.omittedDefaultRefutations.map { ($0.label, $0) },
-                uniquingKeysWith: { first, _ in first }
-            )
-            merged.initializers[index].omittedDefaultRefutations =
-                merged.initializers[index].omittedDefaultRefutations.map { kept[$0.label] ?? $0 }
-        }
-        return merged
-    }
-}
-
 /// The arguments a construction call writes, split the way Swift binds them.
 struct CallShape: Hashable {
     /// The labels of the parenthesized arguments, `_` for an unlabelled one.
@@ -193,7 +103,7 @@ struct CallShape: Hashable {
     /// The trailing closures: `_` for the first, then the labels of any more.
     let trailing: [String]
 
-    static let empty = CallShape(ordinary: [], trailing: [])
+    static let empty = Self(ordinary: [], trailing: [])
 
     init(ordinary: [String], trailing: [String]) {
         self.ordinary = ordinary
@@ -204,12 +114,12 @@ struct CallShape: Hashable {
     /// costs the shape.
     init(_ call: FunctionCallExprSyntax) {
         ordinary = call.arguments.map { $0.label?.text ?? "_" }
-        var trailing: [String] = []
+        var closureLabels: [String] = []
         if call.trailingClosure != nil {
-            trailing.append("_")
-            trailing += call.additionalTrailingClosures.map(\.label.text)
+            closureLabels.append("_")
+            closureLabels += call.additionalTrailingClosures.map(\.label.text)
         }
-        self.trailing = trailing
+        trailing = closureLabels
     }
 
     /// Every label written, for deciding which defaults the call omitted.
@@ -262,6 +172,88 @@ struct CallShape: Hashable {
             declared += 1
         }
         return declared
+    }
+}
+
+/// One declared type and the facts about constructing it.
+struct ConstructionDeclaration: Sendable, Equatable {
+    let qualifiedName: String
+    let bareName: String
+    let kind: ConstructionKind
+    /// A class nothing may subclass — `final`, or an actor.
+    let isFinal: Bool
+    let isPropertyWrapper: Bool
+    /// The declaration itself, so its inheritance clause resolves from where it is written.
+    let site: Syntax
+    /// Every type named in an inheritance clause, its own and its extensions', with protocol
+    /// compositions spelled out.
+    var inheritedNames: [String]
+    /// Refutes every construction, whatever initializer it reaches.
+    var unconditional: PurityRefutation?
+    /// The struct `var` defaults — conditional, because the memberwise initializer takes them as
+    /// arguments.
+    var conditionalStoredDefault: PurityRefutation?
+    var initializers: [ConstructionInitializer]
+
+    /// The witness for constructing it, reaching `cause` through `step`.
+    func refuted(via step: PurityRefutation.ConstructionStep, _ cause: PurityRefutation) -> PurityRefutation {
+        .refutingConstruction(type: qualifiedName, via: step, cause: cause)
+    }
+
+    /// A class that declares no designated initializer of its own inherits its superclass's.
+    var inheritsDesignatedInitializers: Bool {
+        kind == .classOrActor && !initializers.contains { $0.origin == .declared && !$0.isConvenience }
+    }
+
+    /// The initializers `call` fits. Swift prefers a type's own initializer to a protocol
+    /// extension's with the same labels, so that one is set aside.
+    func accepting(_ call: CallShape) -> [ConstructionInitializer] {
+        let fitting = initializers.filter { call.reaches($0.parameters) }
+        // The shape guess asks this of every type: with nothing to set aside, build no set.
+        guard fitting.contains(where: { $0.origin == .protocolExtension }) else { return fitting }
+        let own = fitting.filter { $0.origin != .protocolExtension }
+        let ownLabels = Set(own.map { $0.parameters.map(\.label) })
+        return own + fitting.filter {
+            $0.origin == .protocolExtension && !ownLabels.contains($0.parameters.map(\.label))
+        }
+    }
+
+    /// Anything any construction path can run — the answer when the path is unknown.
+    var anyRefutation: PurityRefutation? {
+        unconditional ?? conditionalStoredDefault ?? initializers.lazy.compactMap(\.anyRefutation).first
+    }
+
+    /// How many places a refutation can land — what bounds the fixpoint.
+    var slotCount: Int {
+        2 + initializers.reduce(0) { $0 + 2 + $1.omittedDefaultRefutations.count }
+    }
+
+    /// How many of them have one.
+    var refutedSlotCount: Int {
+        [unconditional, conditionalStoredDefault].compactMap(\.self).count
+            + initializers.reduce(0) {
+                $0 + [$1.bodyRefutation, $1.storedDefaultRefutation].compactMap(\.self).count
+                    + $1.omittedDefaultRefutations.count
+            }
+    }
+
+    /// `self`, keeping every witness `earlier` already found — so a witness, once assigned, never
+    /// changes, and a recursive construction converges instead of nesting one level deeper on
+    /// every pass.
+    func keeping(_ earlier: Self) -> Self {
+        var merged = self
+        merged.unconditional = earlier.unconditional ?? unconditional
+        merged.conditionalStoredDefault = earlier.conditionalStoredDefault ?? conditionalStoredDefault
+        for index in merged.initializers.indices where index < earlier.initializers.count {
+            let old = earlier.initializers[index]
+            merged.initializers[index].bodyRefutation = old.bodyRefutation ?? merged.initializers[index].bodyRefutation
+            merged.initializers[index].storedDefaultRefutation =
+                old.storedDefaultRefutation ?? merged.initializers[index].storedDefaultRefutation
+            let kept = Dictionary(old.omittedDefaultRefutations.map { ($0.label, $0) }) { first, _ in first }
+            merged.initializers[index].omittedDefaultRefutations =
+                merged.initializers[index].omittedDefaultRefutations.map { kept[$0.label] ?? $0 }
+        }
+        return merged
     }
 }
 

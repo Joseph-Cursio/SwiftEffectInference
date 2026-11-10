@@ -1,7 +1,7 @@
-diff --git a/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift b/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
+diff --git a/Sources/SwiftEffectInference/Internal/TypeShapeCollector.swift b/Sources/SwiftEffectInference/Internal/TypeShapeCollector.swift
 index 1477ac8..d3c0edd 100644
---- a/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
-+++ b/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
+--- a/Sources/SwiftEffectInference/Internal/TypeShapeCollector.swift
++++ b/Sources/SwiftEffectInference/Internal/TypeShapeCollector.swift
 @@ -592,7 +592,6 @@ final class TypeShapeCollector: SyntaxVisitor {
          if !exact.isEmpty { return exact }
          guard let bare = extended.last else { return [] }

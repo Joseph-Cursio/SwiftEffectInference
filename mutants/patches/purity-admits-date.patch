@@ -1,13 +1,12 @@
-diff --git a/Sources/SwiftEffectInference/PurityInferrer.swift b/Sources/SwiftEffectInference/PurityInferrer.swift
-index e379c2e..ce68203 100644
---- a/Sources/SwiftEffectInference/PurityInferrer.swift
-+++ b/Sources/SwiftEffectInference/PurityInferrer.swift
-@@ -190,7 +190,7 @@ public struct PurityInferrer: Sendable {
+diff --git a/Sources/SwiftEffectInference/PurityInferrer+Markers.swift b/Sources/SwiftEffectInference/PurityInferrer+Markers.swift
+--- a/Sources/SwiftEffectInference/PurityInferrer+Markers.swift
++++ b/Sources/SwiftEffectInference/PurityInferrer+Markers.swift
+@@ -108,7 +108,7 @@
      private static let nondeterministicMarkers: Set<String> = Set([
          "arc4random", "arc4random_uniform", "drand48", "CFAbsoluteTimeGetCurrent",
          "random", "randomElement", "shuffled",
 -        "Date", "UUID",
 +        "UUID",
          // Compare against the current instant even when the calendar is handed in.
-         "isDateInToday", "isDateInYesterday", "isDateInTomorrow"
+         "isDateInToday", "isDateInYesterday", "isDateInTomorrow",
      ]).union(propertyMarkers)

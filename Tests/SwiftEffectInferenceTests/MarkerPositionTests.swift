@@ -1,7 +1,7 @@
+@testable import SwiftEffectInference
 import SwiftParser
 import SwiftSyntax
 import Testing
-@testable import SwiftEffectInference
 
 /// The marker scan read every token's text, so a string literal and a key path's component were
 /// matched as code. `"Date"` refuted a function that only returns a column title, and
@@ -14,7 +14,7 @@ import Testing
 /// reference. The same quirk refuted every construction of a SwiftUI view with
 /// `@AppStorage("shuffled")`, through `ConstructionFacts`.
 @Suite("A marker is an identifier in code")
-struct MarkerPositionTests {
+struct MarkerPositionTests: ConstructionTesting {
 
     private func verdict(_ source: String) throws -> PurityVerdict {
         let tree = Parser.parse(source: source)
@@ -30,7 +30,7 @@ struct MarkerPositionTests {
         """,
         "func key() -> String { \"shuffled\" }",
         "func label() -> String { \"print\" }",
-        "func banner() -> String { \"\"\"\n    UUID\n    \"\"\" }"
+        "func banner() -> String { \"\"\"\n    UUID\n    \"\"\" }",
     ])
     func stringLiteralText(source: String) throws {
         #expect(try verdict(source) == .pure, "\(source)")
@@ -39,7 +39,7 @@ struct MarkerPositionTests {
     @Test("a key path's component is not a marker unless the marker is a property", arguments: [
         "func f(_ rows: [Row]) -> [Int] { rows.map(\\.random) }",
         "func f(_ rows: [Row]) -> [Bool] { rows.map(\\.print) }",
-        "func f(_ rows: [Row]) -> [Int] { rows.map(\\.shuffled.count) }"
+        "func f(_ rows: [Row]) -> [Int] { rows.map(\\.shuffled.count) }",
     ])
     func keyPathComponent(source: String) throws {
         #expect(try verdict(source) == .pure, "\(source)")
@@ -54,7 +54,7 @@ struct MarkerPositionTests {
         "func f(_ rows: [Row]) -> [Int] { rows.map { $0.random } }",
         // A subscript component's arguments are evaluated.
         "func f(_ rows: [[Int]]) -> [Int] { rows.map(\\.[Int.random(in: 0...1)]) }",
-        "func f(_ rows: [Row]) -> [Int] { rows.map(\\.seed) + [Int.random(in: 0...9)] }"
+        "func f(_ rows: [Row]) -> [Int] { rows.map(\\.seed) + [Int.random(in: 0...9)] }",
     ])
     func surroundingCode(source: String) throws {
         #expect(try verdict(source) == .refuted, "\(source)")

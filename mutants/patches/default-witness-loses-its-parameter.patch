@@ -1,8 +1,7 @@
-diff --git a/Sources/SwiftEffectInference/PurityInferrer.swift b/Sources/SwiftEffectInference/PurityInferrer.swift
-index 43fe439..2051850 100644
---- a/Sources/SwiftEffectInference/PurityInferrer.swift
-+++ b/Sources/SwiftEffectInference/PurityInferrer.swift
-@@ -524,8 +524,7 @@ public struct PurityInferrer: Sendable {
+diff --git a/Sources/SwiftEffectInference/PurityInferrer+Refutation.swift b/Sources/SwiftEffectInference/PurityInferrer+Refutation.swift
+--- a/Sources/SwiftEffectInference/PurityInferrer+Refutation.swift
++++ b/Sources/SwiftEffectInference/PurityInferrer+Refutation.swift
+@@ -65,8 +65,7 @@
              guard let cause = bodyRefutation(Syntax(defaultValue)) ?? typeRefutation(of: parameter) else {
                  continue
              }

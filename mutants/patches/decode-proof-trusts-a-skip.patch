@@ -1,8 +1,7 @@
-diff --git a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
-index ef66612..0a22fe1 100644
---- a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
-+++ b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
-@@ -446,7 +446,7 @@ extension ConstructionFacts {
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Construction.swift b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Construction.swift
+--- a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Construction.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Construction.swift
+@@ -148,7 +148,7 @@
          memo: ConstructionMemo
      ) -> (refutation: PurityRefutation?, reachesNothing: Bool) {
          if memo.undecodable.contains(index) { return (nil, true) }

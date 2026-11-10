@@ -1,5 +1,5 @@
-import SwiftParser
 @testable import SwiftEffectInference
+import SwiftParser
 import SwiftSyntax
 import Testing
 
@@ -44,7 +44,7 @@ struct PurityEntryPointEquivalenceTests {
         func f() throws -> Int {
             throw MyError.bad
         }
-        """)
+        """),
     ]
 
     @Test("inferredEffect == .pure iff verdict == .pure", arguments: subjects)

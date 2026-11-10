@@ -1,7 +1,7 @@
+@testable import SwiftEffectInference
 import SwiftParser
 import SwiftSyntax
 import Testing
-@testable import SwiftEffectInference
 
 /// The doc-comment scanning surface consumers reuse for their own annotation grammars.
 ///
@@ -17,6 +17,7 @@ struct DocCommentScanningTests {
         let tree = Parser.parse(source: source)
         final class Finder: SyntaxVisitor {
             var found: FunctionDeclSyntax?
+
             override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
                 if found == nil { found = node }
                 return .skipChildren

@@ -1,7 +1,7 @@
+@testable import SwiftEffectInference
 import SwiftParser
 import SwiftSyntax
 import Testing
-@testable import SwiftEffectInference
 
 /// The classifier is consumed by two questions with different tolerances — a
 /// lint rule that must not cry wolf, and a clock refuter that must not
@@ -16,6 +16,7 @@ struct NondeterminismSourcesTests {
     private func firstSource(in source: String) -> NondeterminismSource? {
         final class Collector: SyntaxVisitor {
             var found: NondeterminismSource?
+
             override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
                 if found == nil { found = NondeterminismSources.source(of: node) }
                 return .visitChildren
@@ -45,7 +46,7 @@ struct NondeterminismSourcesTests {
         ("let instant = ContinuousClock.now", .clockAcquisition, "ContinuousClock.now"),
         ("let ticks = mach_absolute_time()", .monotonicClock, "mach_absolute_time()"),
         ("let stamp = DispatchTime.now()", .monotonicClock, "DispatchTime.now"),
-        ("try await Task.sleep(for: .seconds(1))", .timedSuspension, "Task.sleep")
+        ("try await Task.sleep(for: .seconds(1))", .timedSuspension, "Task.sleep"),
     ])
     func timeSources(source: String, kind: NondeterminismSource.Kind, marker: String) {
         let found = firstSource(in: source)
@@ -68,7 +69,7 @@ struct NondeterminismSourcesTests {
         ("let value = drand48()", "drand48()"),
         ("let value = Int.random(in: 0..<10)", ".random(…)"),
         ("let value = values.randomElement()", ".randomElement(…)"),
-        ("let value = values.shuffled()", ".shuffled(…)")
+        ("let value = values.shuffled()", ".shuffled(…)"),
     ])
     func randomnessSources(source: String, marker: String) {
         let found = firstSource(in: source)
@@ -85,7 +86,7 @@ struct NondeterminismSourcesTests {
 
     @Test("ambient environment reads are their own kind", arguments: [
         ("let locale = Locale.current", "Locale.current"),
-        ("let zone = TimeZone.current", "TimeZone.current")
+        ("let zone = TimeZone.current", "TimeZone.current"),
     ])
     func ambientEnvironmentSources(source: String, marker: String) {
         let found = firstSource(in: source)
@@ -101,7 +102,7 @@ struct NondeterminismSourcesTests {
         "let value = Int.random(in: 0..<10, using: &generator)",
         "let value = values.shuffled(using: &generator)",
         "let value = values.randomElement(using: &generator)",
-        "try await Task.sleep(for: .seconds(1), tolerance: nil, clock: clock)"
+        "try await Task.sleep(for: .seconds(1), tolerance: nil, clock: clock)",
     ])
     func injectedForms_areNotSources(source: String) {
         #expect(firstSource(in: source) == nil)
@@ -110,7 +111,7 @@ struct NondeterminismSourcesTests {
     @Test("a Date built from a fixed reference point is deterministic", arguments: [
         "let epoch = Date(timeIntervalSince1970: 0)",
         "let epoch = Date(timeIntervalSinceReferenceDate: 0)",
-        "let later = Date(timeInterval: 60, since: epoch)"
+        "let later = Date(timeInterval: 60, since: epoch)",
     ])
     func fixedDates_areNotSources(source: String) {
         #expect(firstSource(in: source) == nil)
@@ -151,7 +152,7 @@ struct NondeterminismSourcesTests {
         "DispatchTime.now()",
         "values.map { $0 }.shuffled()",
         "Date.now",
-        "Locale.current"
+        "Locale.current",
     ])
     func position(expression: String) {
         let prefix = "let first = 0\nlet value =\n    /* leading trivia */ "

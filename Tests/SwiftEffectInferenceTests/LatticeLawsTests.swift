@@ -28,7 +28,7 @@ struct LatticeLawsTests {
         .observational,
         .idempotent,
         .externallyIdempotent(keyParameter: nil),
-        .nonIdempotent
+        .nonIdempotent,
     ]
 
     /// Independent oracle for the intended ordering. Mirrors the lattice's rank

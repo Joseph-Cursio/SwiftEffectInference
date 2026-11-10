@@ -1,5 +1,3 @@
-import Foundation
-
 /// Stdlib-collection operations that are **not** anchors for bare-name
 /// inference. The first-slice bare-name whitelist classifies `append`,
 /// `insert`, and friends as non_idempotent, which is correct for
@@ -51,12 +49,12 @@ public enum StdlibIdempotentMutations {
         return excluded.contains(TypeMethodPair(type: typeName, method: method))
     }
 
-    fileprivate struct TypeMethodPair: Hashable {
+    private struct TypeMethodPair: Hashable {
         let type: String
         let method: String
     }
 
-    fileprivate static let excluded: Set<TypeMethodPair> = [
+    private static let excluded: Set<TypeMethodPair> = [
         // Array — local-mutation methods.
         TypeMethodPair(type: "Array", method: "append"),
         TypeMethodPair(type: "Array", method: "insert"),
@@ -78,6 +76,6 @@ public enum StdlibIdempotentMutations {
 
         // Dictionary — key-addressed mutation is replay-safe.
         TypeMethodPair(type: "Dictionary", method: "removeValue"),
-        TypeMethodPair(type: "Dictionary", method: "updateValue")
+        TypeMethodPair(type: "Dictionary", method: "updateValue"),
     ]
 }

@@ -1,6 +1,5 @@
-import Foundation
-import SwiftParser
 @testable import SwiftEffectInference
+import SwiftParser
 import SwiftSyntax
 import Testing
 
@@ -28,7 +27,7 @@ struct PurityInferrerPerformanceTests {
     /// functions that used to pay two full body walks to reach a verdict their
     /// signature already settled.
     static func throwingCorpus(count: Int) -> [FunctionDeclSyntax] {
-        let source = (0 ..< count).map { index in
+        let functions = (0 ..< count).map { index in
             """
             func subject\(index)(_ text: String) throws -> Int {
                 let trimmed = text.trimmingCharacters(in: .whitespaces)
@@ -38,8 +37,10 @@ struct PurityInferrerPerformanceTests {
                 return value + parts.count
             }
             """
-        }.joined(separator: "\n")
-        return Parser.parse(source: source).statements
+        }
+        let source = functions.joined(separator: "\n")
+        return Parser.parse(source: source)
+            .statements
             .compactMap { $0.item.as(FunctionDeclSyntax.self) }
     }
 
@@ -94,15 +95,17 @@ struct PurityInferrerPerformanceTests {
     /// that simply returned `nil` for everything would pass the test above.
     @Test("On non-throwing code the two paths cost about the same — the control")
     func nonThrowingCorpusCostsAreComparable() {
-        let source = (0 ..< 400).map { index in
+        let functions = (0 ..< 400).map { index in
             """
             func subject\(index)(_ text: String) -> Int {
                 let trimmed = text.trimmingCharacters(in: .whitespaces)
                 return trimmed.count + \(index)
             }
             """
-        }.joined(separator: "\n")
-        let corpus = Parser.parse(source: source).statements
+        }
+        let source = functions.joined(separator: "\n")
+        let corpus = Parser.parse(source: source)
+            .statements
             .compactMap { $0.item.as(FunctionDeclSyntax.self) }
         let inferrer = PurityInferrer()
         for function in corpus {

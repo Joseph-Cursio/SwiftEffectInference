@@ -1,6 +1,5 @@
-import SwiftParser
 @testable import SwiftEffectInference
-import SwiftSyntax
+import SwiftParser
 import Testing
 
 /// What building `ConstructionFacts` costs where one name is declared in many files, on the shapes
@@ -35,7 +34,7 @@ struct ConstructionNamesakeCostTests {
     @Test("four times the subclass namesakes cost about sixteen times as much, not sixty-four", .timeLimit(.minutes(2)))
     func subclassNamesakesScale() {
         let short = Self.cost(of: ConstructionNamesakeTests.subclassNamesakes(copies: 250))
-        let long = Self.cost(of: ConstructionNamesakeTests.subclassNamesakes(copies: 1000))
+        let long = Self.cost(of: ConstructionNamesakeTests.subclassNamesakes(copies: 1_000))
         let ratio = long / short
         #expect(
             ratio < 32,
@@ -51,7 +50,7 @@ struct ConstructionNamesakeCostTests {
     @Test("four times the classes building `Self` members cost about four times as much", .timeLimit(.minutes(2)))
     func selfInClassesScale() {
         let short = Self.cost(of: ConstructionNamesakeTests.selfInClasses(count: 400, distinct: true))
-        let long = Self.cost(of: ConstructionNamesakeTests.selfInClasses(count: 1600, distinct: true))
+        let long = Self.cost(of: ConstructionNamesakeTests.selfInClasses(count: 1_600, distinct: true))
         let ratio = long / short
         #expect(
             ratio < 8,

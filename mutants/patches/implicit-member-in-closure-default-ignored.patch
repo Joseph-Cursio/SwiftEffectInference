@@ -1,8 +1,7 @@
-diff --git a/Sources/SwiftEffectInference/PurityInferrer.swift b/Sources/SwiftEffectInference/PurityInferrer.swift
-index e379c2e..30249a7 100644
---- a/Sources/SwiftEffectInference/PurityInferrer.swift
-+++ b/Sources/SwiftEffectInference/PurityInferrer.swift
-@@ -891,6 +891,8 @@ final class ImplicitMemberChecker: SourceAccurateSyntaxVisitor {
+diff --git a/Sources/SwiftEffectInference/ImplicitMemberChecker.swift b/Sources/SwiftEffectInference/ImplicitMemberChecker.swift
+--- a/Sources/SwiftEffectInference/ImplicitMemberChecker.swift
++++ b/Sources/SwiftEffectInference/ImplicitMemberChecker.swift
+@@ -6,6 +6,8 @@
  
      private(set) var found = false
  

@@ -1,7 +1,7 @@
+@testable import SwiftEffectInference
 import SwiftParser
 import SwiftSyntax
 import Testing
-@testable import SwiftEffectInference
 
 /// Exercises the canonical `PurityInferrer` — the shared oracle that decides
 /// whether a function is `Effect.pure` (referential transparency).
@@ -278,7 +278,7 @@ struct PurityInferrerTests {
             "func add(_ lhs: Int, _ rhs: Int) -> Int { lhs + rhs }",
             "func parse(_ text: String) throws -> Int { Int(text) ?? 0 }",
             "func fetch(_ id: Int) async -> Int { id }",
-            "func stamp() -> String { \"\\(Date())\" }"
+            "func stamp() -> String { \"\\(Date())\" }",
         ]
         for source in sources {
             let tree = Parser.parse(source: source)

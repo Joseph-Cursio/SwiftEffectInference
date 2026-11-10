@@ -1,6 +1,5 @@
-import Foundation
-import SwiftParser
 @testable import SwiftEffectInference
+import SwiftParser
 import SwiftSyntax
 import Testing
 
@@ -13,7 +12,7 @@ import Testing
 /// the regression and on no machine CI runs on. `.timeLimit` is the backstop for a regression that
 /// would not finish at all.
 @Suite("ConstructionFacts — cost budget")
-struct ConstructionCostTests {
+struct ConstructionCostTests: ConstructionTesting {
 
     static let budget: Duration = .seconds(10)
 
@@ -50,7 +49,7 @@ struct ConstructionCostTests {
     /// The types a construction witness passes through, outermost first, and what it ends in.
     static func path(_ refutation: PurityRefutation?) -> [String] {
         guard let refutation else { return [] }
-        guard case .refutingConstruction(let type, let step, let cause) = refutation else { return ["\(refutation)"] }
+        guard case let .refutingConstruction(type, step, cause) = refutation else { return ["\(refutation)"] }
         switch step {
         case .initializer(let signature): return ["\(type) \(signature)"] + path(cause)
         case .storedProperty(let property): return ["\(type).\(property)"] + path(cause)
@@ -74,7 +73,7 @@ struct ConstructionCostTests {
         #expect(facts.refutedTypeNames.count == 137)
         #expect(Self.path(refutation) == [
             "L0N0 init(from:)", "L1N1.p0", "L2N2.p0", "L3N3.p0", "L4N4.p2", "L5N3.p2", "L6N2.p2", "L7N1.p2",
-            "L8N0.p2", "L9N39.p0", "Stamp.id", "references the nondeterminism marker `UUID`"
+            "L8N0.p2", "L9N39.p0", "Stamp.id", "references the nondeterminism marker `UUID`",
         ])
         #expect(elapsed < Self.budget, "built and judged in \(elapsed)")
     }
@@ -165,7 +164,7 @@ struct ConstructionCostTests {
 
         #expect(Self.path(near) == [
             "C5: C4", "C4: C3", "C3: C2", "C2: C1", "C1: C0", "C0 init(name:)",
-            "references the nondeterminism marker `UUID`"
+            "references the nondeterminism marker `UUID`",
         ])
         // Twenty classes up is past the eight a reference climbs.
         #expect(far == nil)
@@ -256,6 +255,7 @@ struct ConstructionCostTests {
         """)
         final class Bodies: SyntaxVisitor {
             var found: [Syntax] = []
+
             override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
                 if let body = node.body { found.append(Syntax(body)) }
                 return .skipChildren

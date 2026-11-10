@@ -1,8 +1,7 @@
-diff --git a/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift b/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
-index 0379716..63ec68f 100644
---- a/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
-+++ b/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
-@@ -89,7 +89,7 @@ struct RawDeclaration {
+diff --git a/Sources/SwiftEffectInference/Internal/RawDeclaration.swift b/Sources/SwiftEffectInference/Internal/RawDeclaration.swift
+--- a/Sources/SwiftEffectInference/Internal/RawDeclaration.swift
++++ b/Sources/SwiftEffectInference/Internal/RawDeclaration.swift
+@@ -89,7 +89,7 @@
          var conditional: PurityRefutation?
          var omitted: [OmittedDefault] = []
          func witness(_ property: String, _ cause: PurityRefutation) -> PurityRefutation {

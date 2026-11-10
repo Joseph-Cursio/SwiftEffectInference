@@ -1,7 +1,7 @@
-diff --git a/Sources/SwiftEffectInference/Internal/ConstructionChecker.swift b/Sources/SwiftEffectInference/Internal/ConstructionChecker.swift
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionChecker+ExpectedTypes.swift b/Sources/SwiftEffectInference/Internal/ConstructionChecker+ExpectedTypes.swift
 index 7d4a4b6..5e90d93 100644
---- a/Sources/SwiftEffectInference/Internal/ConstructionChecker.swift
-+++ b/Sources/SwiftEffectInference/Internal/ConstructionChecker.swift
+--- a/Sources/SwiftEffectInference/Internal/ConstructionChecker+ExpectedTypes.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionChecker+ExpectedTypes.swift
 @@ -246,7 +246,7 @@ extension ConstructionChecker {
                  let elements = Array(tupleType.elements)
                  // A labelled element binds by label — `(b: …, a: …)` against `(a: A, b: B)` is a

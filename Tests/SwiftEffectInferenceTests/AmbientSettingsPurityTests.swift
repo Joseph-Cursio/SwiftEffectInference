@@ -1,7 +1,7 @@
+@testable import SwiftEffectInference
 import SwiftParser
 import SwiftSyntax
 import Testing
-@testable import SwiftEffectInference
 
 /// Reads of the user's calendar, locale and time zone that the classifier does not know. Each
 /// answers differently on a machine set to another time zone or locale, so none is a function of
@@ -37,7 +37,7 @@ struct AmbientSettingsPurityTests {
         "func days(_ ds: [Date]) -> [Int] { ds.map { Calendar.current.component(.day, from: $0) } }",
         // The Objective-C twins.
         "func hour(_ d: Date) -> Int { NSCalendar.current.component(.hour, from: d) }",
-        "func id() -> String { NSLocale.current.identifier }"
+        "func id() -> String { NSLocale.current.identifier }",
     ])
     func calendarCurrent(source: String) throws {
         #expect(try verdict(source) == .refuted, "\(source)")
@@ -54,7 +54,7 @@ struct AmbientSettingsPurityTests {
     @Test("a calendar handed in, or another type's current, is not ambient", arguments: [
         "func year(_ d: Date, in calendar: Calendar) -> Int { calendar.component(.year, from: d) }",
         "func first(_ calendar: Calendar) -> Int { calendar.firstWeekday }",
-        "func level(_ config: Configuration) -> Int { config.current.level }"
+        "func level(_ config: Configuration) -> Int { config.current.level }",
     ])
     func calendarHandedIn(source: String) throws {
         #expect(try verdict(source) == .pure, "\(source)")
@@ -70,7 +70,7 @@ struct AmbientSettingsPurityTests {
         "func hour(_ d: Date, calendar: Calendar = .current) -> Int { calendar.component(.hour, from: d) }",
         "func label(_ n: Double, locale: Locale = .current) -> String { String(n) }",
         "func offset(_ d: Date, zone: TimeZone = .current) -> Int { zone.secondsFromGMT(for: d) }",
-        "func hour(_ d: Date, calendar: Calendar? = .current) -> Int { 0 }"
+        "func hour(_ d: Date, calendar: Calendar? = .current) -> Int { 0 }",
     ])
     func currentDefault(source: String) throws {
         #expect(try verdict(source) == .refuted, "\(source)")
@@ -89,7 +89,7 @@ struct AmbientSettingsPurityTests {
     @Test("a default that names no ambient setting", arguments: [
         "func hour(_ d: Date, in calendar: Calendar) -> Int { calendar.component(.hour, from: d) }",
         "func level(_ n: Int, env: Environment = .current) -> Int { n }",
-        "func offset(_ d: Date, zone: TimeZone = .gmt) -> Int { zone.secondsFromGMT(for: d) }"
+        "func offset(_ d: Date, zone: TimeZone = .gmt) -> Int { zone.secondsFromGMT(for: d) }",
     ])
     func defaultThatIsNotAmbient(source: String) throws {
         #expect(try verdict(source) == .pure, "\(source)")
@@ -104,7 +104,7 @@ struct AmbientSettingsPurityTests {
         "func id() -> String { Locale.autoupdatingCurrent.identifier }",
         "func zone() -> String { TimeZone.autoupdatingCurrent.identifier }",
         "func year(_ d: Date) -> Int { Calendar.autoupdatingCurrent.component(.year, from: d) }",
-        "func label(_ n: Int, locale: Locale = .autoupdatingCurrent) -> String { String(n) }"
+        "func label(_ n: Int, locale: Locale = .autoupdatingCurrent) -> String { String(n) }",
     ])
     func autoupdatingCurrent(source: String) throws {
         #expect(try verdict(source) == .refuted, "\(source)")
@@ -132,7 +132,7 @@ struct AmbientSettingsPurityTests {
         "func elapsed(_ t: Duration) -> String { t.formatted(.units(allowed: [.minutes, .seconds])) }",
         "func names(_ xs: [String]) -> String { xs.formatted() }",
         "func label(_ e: Event) -> String { e.date.formatted(e.style) }",
-        "func labels(_ ds: [Date]) -> [String] { ds.map { $0.formatted() } }"
+        "func labels(_ ds: [Date]) -> [String] { ds.map { $0.formatted() } }",
     ])
     func formatted(source: String) throws {
         #expect(try verdict(source) == .refuted, "\(source)")
@@ -154,7 +154,7 @@ struct AmbientSettingsPurityTests {
         "func strategy(_ f: DateFormatter) -> JSONEncoder.DateEncodingStrategy { .formatted(f) }",
         "func isFormatted(_ s: Strategy) -> Bool { if case .formatted = s { return true }; return false }",
         "func label(_ p: Price) -> String { p.formatted }",
-        "func label(_ n: Int) -> String { formatted(n) }"
+        "func label(_ n: Int) -> String { formatted(n) }",
     ])
     func formattedThatIsNotAmbient(source: String) throws {
         #expect(try verdict(source) == .pure, "\(source)")
