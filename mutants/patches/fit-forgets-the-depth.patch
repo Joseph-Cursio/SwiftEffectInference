@@ -1,8 +1,7 @@
-diff --git a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
-index ef66612..03e72c4 100644
---- a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
-+++ b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
-@@ -367,7 +367,7 @@ extension ConstructionFacts {
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Construction.swift b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Construction.swift
+--- a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Construction.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Construction.swift
+@@ -69,7 +69,7 @@
      /// The depth bound is what ends a cycle of superclasses, so it is part of the question.
      private func mayFit(_ call: CallShape, _ index: Int, depth: Int = 0) -> Bool {
          guard let memo = memo.instance else { return memoised().mayFit(call, index, depth: depth) }

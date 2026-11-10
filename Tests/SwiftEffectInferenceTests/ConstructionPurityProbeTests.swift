@@ -202,8 +202,17 @@ struct ConstructionPurityProbeTests: ConstructionTesting {
     }
 
     @Test("an extension initializer on a specialized or aliased spelling is attached", arguments: [
-        "struct Box<T> { let v: T }\nextension Box<Int> { init(stamped: Int) { v = Int(Date().timeIntervalSince1970) } }\nfunc f() -> Any { Box<Int>(stamped: 1) }",
-        "struct Box { let v: Int }\ntypealias Crate = Box\nextension Crate { init(stamped: Int) { v = Int(Date().timeIntervalSince1970) } }\nfunc f() -> Any { Box(stamped: 1) }",
+        """
+        struct Box<T> { let v: T }
+        extension Box<Int> { init(stamped: Int) { v = Int(Date().timeIntervalSince1970) } }
+        func f() -> Any { Box<Int>(stamped: 1) }
+        """,
+        """
+        struct Box { let v: Int }
+        typealias Crate = Box
+        extension Crate { init(stamped: Int) { v = Int(Date().timeIntervalSince1970) } }
+        func f() -> Any { Box(stamped: 1) }
+        """,
     ])
     func extensionThroughSpecializationOrAlias(source: String) throws {
         #expect(try refuted("f", in: source))

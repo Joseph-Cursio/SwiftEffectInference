@@ -1,8 +1,7 @@
-diff --git a/Sources/SwiftEffectInference/PurityInferrer.swift b/Sources/SwiftEffectInference/PurityInferrer.swift
-index e379c2e..cf05597 100644
---- a/Sources/SwiftEffectInference/PurityInferrer.swift
-+++ b/Sources/SwiftEffectInference/PurityInferrer.swift
-@@ -734,7 +734,7 @@ public struct PurityInferrer: Sendable {
+diff --git a/Sources/SwiftEffectInference/PurityInferrer+Markers.swift b/Sources/SwiftEffectInference/PurityInferrer+Markers.swift
+--- a/Sources/SwiftEffectInference/PurityInferrer+Markers.swift
++++ b/Sources/SwiftEffectInference/PurityInferrer+Markers.swift
+@@ -314,7 +314,7 @@
          guard let call = member.parent?.as(FunctionCallExprSyntax.self), call.calledExpression.id == member.id else {
              return true
          }

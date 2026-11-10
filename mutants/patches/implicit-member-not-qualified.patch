@@ -1,8 +1,7 @@
-diff --git a/Sources/SwiftEffectInference/Internal/TypeShapeCollector.swift b/Sources/SwiftEffectInference/Internal/TypeShapeCollector.swift
-index 1477ac8..532485a 100644
---- a/Sources/SwiftEffectInference/Internal/TypeShapeCollector.swift
-+++ b/Sources/SwiftEffectInference/Internal/TypeShapeCollector.swift
-@@ -215,7 +215,7 @@ struct RawDeclaration {
+diff --git a/Sources/SwiftEffectInference/Internal/RawDeclaration.swift b/Sources/SwiftEffectInference/Internal/RawDeclaration.swift
+--- a/Sources/SwiftEffectInference/Internal/RawDeclaration.swift
++++ b/Sources/SwiftEffectInference/Internal/RawDeclaration.swift
+@@ -215,7 +215,7 @@
      ) -> PurityRefutation? {
          if let refutation = inferrer.constructionRefutation(Syntax(value)) { return refutation }
          guard let type else { return nil }

@@ -175,9 +175,18 @@ extension ConstructionPurityTests {
         final class Finder: SyntaxVisitor {
             var accessor: AccessorBlockSyntax?; var function: FunctionDeclSyntax?; var closure: ClosureExprSyntax?
 
-            override func visit(_ node: AccessorBlockSyntax) -> SyntaxVisitorContinueKind { accessor = accessor ?? node; return .visitChildren }
-            override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind { function = function ?? node; return .visitChildren }
-            override func visit(_ node: ClosureExprSyntax) -> SyntaxVisitorContinueKind { closure = closure ?? node; return .visitChildren }
+            override func visit(_ node: AccessorBlockSyntax) -> SyntaxVisitorContinueKind {
+                accessor = accessor ?? node
+                return .visitChildren
+            }
+            override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
+                function = function ?? node
+                return .visitChildren
+            }
+            override func visit(_ node: ClosureExprSyntax) -> SyntaxVisitorContinueKind {
+                closure = closure ?? node
+                return .visitChildren
+            }
         }
         let finder = Finder(viewMode: .sourceAccurate)
         finder.walk(tree)

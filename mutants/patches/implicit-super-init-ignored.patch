@@ -1,8 +1,7 @@
-diff --git a/Sources/SwiftEffectInference/Internal/TypeShapeCollector.swift b/Sources/SwiftEffectInference/Internal/TypeShapeCollector.swift
-index 0379716..337d10e 100644
---- a/Sources/SwiftEffectInference/Internal/TypeShapeCollector.swift
-+++ b/Sources/SwiftEffectInference/Internal/TypeShapeCollector.swift
-@@ -155,7 +155,7 @@ struct RawDeclaration {
+diff --git a/Sources/SwiftEffectInference/Internal/RawDeclaration.swift b/Sources/SwiftEffectInference/Internal/RawDeclaration.swift
+--- a/Sources/SwiftEffectInference/Internal/RawDeclaration.swift
++++ b/Sources/SwiftEffectInference/Internal/RawDeclaration.swift
+@@ -155,7 +155,7 @@
          var body: PurityRefutation?
          if let block = declaration.body, let cause = inferrer.constructionRefutation(Syntax(block)) {
              body = .refutingConstruction(type: qualifiedName, via: .initializer(display), cause: cause)

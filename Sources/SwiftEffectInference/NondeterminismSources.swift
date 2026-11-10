@@ -154,36 +154,7 @@ public enum NondeterminismSources {
         // `Date()`, `UUID()`, `ContinuousClock()`, `arc4random()` — a bare type
         // or function name callee.
         if let reference = call.calledExpression.as(DeclReferenceExprSyntax.self) {
-            let name = reference.baseName.text
-            if name == "Date" {
-                if call.arguments.isEmpty {
-                    return found(.wallClockNow, "Date()")
-                }
-                if call.arguments.first?.label?.text == "timeIntervalSinceNow" {
-                    // Reported under its own spelling, not folded into `Date()`:
-                    // a diagnostic naming the initializer the author wrote is
-                    // the difference between "this reads the clock" and "which
-                    // of these reads the clock".
-                    return found(.wallClockOffset, "Date(timeIntervalSinceNow:)")
-                }
-                return nil
-            }
-            if name == "UUID", call.arguments.isEmpty {
-                return found(.identity, "UUID()")
-            }
-            if ambientClockTypes.contains(name) {
-                return found(.clockAcquisition, "\(name)()")
-            }
-            if name == "CFAbsoluteTimeGetCurrent" {
-                return found(.wallClockNow, "\(name)()")
-            }
-            if monotonicClockFunctions.contains(name) {
-                return found(.monotonicClock, "\(name)()")
-            }
-            if randomFunctions.contains(name) {
-                return found(.randomness, "\(name)()")
-            }
-            return nil
+            return source(ofCallee: reference.baseName.text, in: call, found: found)
         }
 
         // `Task.sleep(…)`, `DispatchTime.now()`, `Int.random(in:)`,
@@ -208,6 +179,44 @@ public enum NondeterminismSources {
             return found(.randomness, ".\(memberName)(…)")
         }
 
+        return nil
+    }
+
+    /// Classifies a call whose callee is the bare type or function name `name`, or `nil`. `found`
+    /// is `source(of:)`'s, so the call is located only once it is known to be a source.
+    private static func source(
+        ofCallee name: String,
+        in call: FunctionCallExprSyntax,
+        found: (NondeterminismSource.Kind, String) -> NondeterminismSource
+    ) -> NondeterminismSource? {
+        if name == "Date" {
+            if call.arguments.isEmpty {
+                return found(.wallClockNow, "Date()")
+            }
+            if call.arguments.first?.label?.text == "timeIntervalSinceNow" {
+                // Reported under its own spelling, not folded into `Date()`:
+                // a diagnostic naming the initializer the author wrote is
+                // the difference between "this reads the clock" and "which
+                // of these reads the clock".
+                return found(.wallClockOffset, "Date(timeIntervalSinceNow:)")
+            }
+            return nil
+        }
+        if name == "UUID", call.arguments.isEmpty {
+            return found(.identity, "UUID()")
+        }
+        if ambientClockTypes.contains(name) {
+            return found(.clockAcquisition, "\(name)()")
+        }
+        if name == "CFAbsoluteTimeGetCurrent" {
+            return found(.wallClockNow, "\(name)()")
+        }
+        if monotonicClockFunctions.contains(name) {
+            return found(.monotonicClock, "\(name)()")
+        }
+        if randomFunctions.contains(name) {
+            return found(.randomness, "\(name)()")
+        }
         return nil
     }
 

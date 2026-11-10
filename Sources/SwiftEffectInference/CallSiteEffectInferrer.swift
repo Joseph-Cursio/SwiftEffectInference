@@ -181,7 +181,27 @@ public enum CallSiteEffectInferrer {
         receiverName: String?,
         context: FrameworkContext
     ) -> Inference? {
+        // The receiver-shape rules all need a receiver and the framework-table rules'
+        // type-constructor match needs none, so running the receiver-shape group first
+        // keeps every verdict the single ordered chain produced.
+        if let receiverName,
+           let inference = receiverShapeInference(
+               calleeName: calleeName, receiverName: receiverName, context: context
+           ) {
+            return inference
+        }
+        return frameworkTableInference(
+            calleeName: calleeName, receiverName: receiverName, context: context
+        )
+    }
 
+    /// The receiver-shape rules of `frameworkGatedInference`: a logger-, metric- or
+    /// codec-shaped receiver paired with a method from the matching list.
+    private static func receiverShapeInference(
+        calleeName: String,
+        receiverName: String,
+        context: FrameworkContext
+    ) -> Inference? {
         // Observational requires a logger-shaped receiver AND a log-level
         // method name. Two strong signals — high precision; not gated by
         // import. swift-log is commonly accessed transitively through
@@ -190,8 +210,7 @@ public enum CallSiteEffectInferrer {
         // file's own imports don't include `Logging` directly. Gating on
         // `Logging`/`os` regressed round-9's chained-logger fix on
         // exactly that adoption shape.
-        if let receiverName,
-           isLoggerReceiver(receiverName),
+        if isLoggerReceiver(receiverName),
            loggerLevelMethods.contains(calleeName) {
             return Inference(
                 effect: .observational,
@@ -202,8 +221,7 @@ public enum CallSiteEffectInferrer {
         // Metric primitives (swift-metrics + observational-by-convention
         // siblings). Gated on `Metrics` import when import-awareness
         // is active.
-        if let receiverName,
-           isMetricReceiver(receiverName),
+        if isMetricReceiver(receiverName),
            metricObservationMethods.contains(calleeName),
            context.isFrameworkActive(FrameworkGates.metrics) {
             return Inference(
@@ -212,6 +230,27 @@ public enum CallSiteEffectInferrer {
             )
         }
 
+        // Codec-pattern method whitelist. Gated on `Foundation` import
+        // when import-awareness is active.
+        if isCodecReceiver(receiverName),
+           codecMethods.contains(calleeName),
+           context.isFrameworkActive(FrameworkGates.foundation) {
+            return Inference(
+                effect: .idempotent,
+                reason: "from codec-pattern receiver `\(receiverName).\(calleeName)`"
+            )
+        }
+
+        return nil
+    }
+
+    /// The framework-table rules of `frameworkGatedInference`: names looked up in
+    /// `FrameworkGates`' curated per-framework tables.
+    private static func frameworkTableInference(
+        calleeName: String,
+        receiverName: String?,
+        context: FrameworkContext
+    ) -> Inference? {
         // Type-constructor whitelist — per-framework groups. When
         // import-aware, only firewall-the-adopter-uses groups apply.
         if receiverName == nil,
@@ -222,18 +261,6 @@ public enum CallSiteEffectInferrer {
             return Inference(
                 effect: .idempotent,
                 reason: "from the known-idempotent \(framework) type `\(calleeName)`"
-            )
-        }
-
-        // Codec-pattern method whitelist. Gated on `Foundation` import
-        // when import-awareness is active.
-        if let receiverName,
-           isCodecReceiver(receiverName),
-           codecMethods.contains(calleeName),
-           context.isFrameworkActive(FrameworkGates.foundation) {
-            return Inference(
-                effect: .idempotent,
-                reason: "from codec-pattern receiver `\(receiverName).\(calleeName)`"
             )
         }
 
@@ -366,171 +393,6 @@ public enum CallSiteEffectInferrer {
             )
         }
 
-        return nil
-    }
-
-    /// Extracts `(calleeName, receiverName?)` from a call's called-expression.
-    ///
-    /// - `foo()` → `("foo", nil)`
-    /// - `x.foo()` → `("foo", "x")`
-    /// - `a.b.foo()` → `("foo", "b")` — the *immediate-parent* segment of
-    ///   a chained member access, matching the semantic "the thing that
-    ///   exposes `.foo`." Enables the observational heuristic to match
-    ///   `context.logger.info(...)` where `logger` is the logger-shaped
-    ///   segment even though it isn't the outermost base.
-    /// - `a.b.c.foo()` → `("foo", "c")` — same rule extends to any depth.
-    /// - `Foo.init(...)` → `("Foo", nil)` — normalised to the bare-identifier
-    ///   form so the type-constructor whitelist fires on either spelling.
-    ///   `A.B.init(...)` → `("B", nil)` (immediate type name); `Foo<T>.init(...)`
-    ///   → `("Foo", nil)` (generic base peeled). `self.init(...)` and
-    ///   `super.init(...)` normalise to `("self", nil)` / `("super", nil)`,
-    ///   which match no whitelist — outcome unchanged.
-    /// - Anything structurally more complex (subscripts, casts, function-
-    ///   call bases, tuple projections) → `nil`.
-    private static func callParts(of expr: ExprSyntax) -> (String, String?)? {
-        if let ref = expr.as(DeclReferenceExprSyntax.self) {
-            return (ref.baseName.text, nil)
-        }
-        if let member = expr.as(MemberAccessExprSyntax.self) {
-            let callee = member.declName.baseName.text
-            guard let base = member.base else {
-                return (callee, nil)
-            }
-            // `Type.init(...)` — treat the explicit-initializer form as
-            // semantically identical to `Type(...)`. Without this normalisation
-            // the type-constructor whitelist fires on `JSONDecoder()` but
-            // misses `JSONDecoder.init()`, producing one stray diagnostic per
-            // framework-response-builder call site that uses the explicit form.
-            if callee == "init", let typeName = typeIdentifierName(of: base) {
-                return (typeName, nil)
-            }
-            if let baseRef = base.as(DeclReferenceExprSyntax.self) {
-                return (callee, baseRef.baseName.text)
-            }
-            if let innerMember = base.as(MemberAccessExprSyntax.self) {
-                return (callee, innerMember.declName.baseName.text)
-            }
-            return (callee, nil)
-        }
-        return nil
-    }
-
-    /// Extracts the leaf type identifier from an expression used as the
-    /// base of a `.init(...)` call. Returns nil when the base is not a
-    /// type reference the whitelist could match (closure calls, subscripts,
-    /// tuple projections, etc.).
-    ///
-    /// - `Foo` → `"Foo"`
-    /// - `A.B` → `"B"` (nested type; immediate leaf)
-    /// - `Foo<T>` → `"Foo"` (generic-specialization base peeled)
-    /// - `A.B<T>` → `"B"`
-    private static func typeIdentifierName(of expr: ExprSyntax) -> String? {
-        // Peel a generic specialization (`Foo<T>` → `Foo`) then recurse; the
-        // peeled expression is normally a plain reference / member access.
-        if let spec = expr.as(GenericSpecializationExprSyntax.self) {
-            return typeIdentifierName(of: spec.expression)
-        }
-        return expr.referenceBaseName
-    }
-
-    /// Receiver-shape test shared by the logger/metric/codec heuristics:
-    /// lowercases `name` and reports whether it *contains* any of `needles`
-    /// as a substring. The substring (not exact-match) policy is what lets
-    /// suffixed variants — `requestLogger`, `activeRequestMeter` — qualify.
-    /// `needles` must already be lowercased.
-    static func isReceiver(_ name: String, matchingAnyOf needles: [String]) -> Bool {
-        let lowered = name.lowercased()
-        return needles.contains { lowered.contains($0) }
-    }
-
-    /// Matches `logger`, `Logger`, `log`, `Log`, `os_log`, plus suffixed
-    /// variants like `requestLogger`, `rootLogger`, etc. Kept conservative —
-    /// the receiver name must *literally* contain "log" (case-insensitive)
-    /// as a substring. Intentionally loose on casing but tight on structure.
-    static func isLoggerReceiver(_ name: String) -> Bool {
-        isReceiver(name, matchingAnyOf: ["log"])
-    }
-
-    /// Matches swift-metrics primitive receivers and conventional siblings.
-    /// `counter`, `Counter`, `gauge`, `meter`, `timer`, `recorder`, plus
-    /// suffixed variants (`activeRequestMeter`, `requestCounter`, etc.).
-    /// Round-12 follow-on — observationally absorbs metric mutations the
-    /// same way the logger path absorbs log emissions.
-    static func isMetricReceiver(_ name: String) -> Bool {
-        isReceiver(name, matchingAnyOf: ["counter", "gauge", "meter", "timer", "recorder"])
-    }
-
-    private static let metricObservationMethods: Set<String> = [
-        "increment", "decrement",
-        "record", "recordNanoseconds",
-        "observe",
-        "startTimer",
-    ]
-
-    /// Matches Foundation/SwiftNIO codec receivers. Conservative: receiver
-    /// name must end with or contain `Decoder` / `Encoder` (case-insensitive
-    /// via lowercasing the whole name). Silences codec instances like
-    /// `decoder.decode(...)` without needing a full type resolver.
-    static func isCodecReceiver(_ name: String) -> Bool {
-        isReceiver(name, matchingAnyOf: ["decoder", "encoder"])
-    }
-
-    private static let codecMethods: Set<String> = [
-        "decode", "encode"
-    ]
-
-    private static let loggerLevelMethods: Set<String> = [
-        "trace", "debug", "info", "notice",
-        "warning", "error", "critical", "fault",
-        "log",
-    ]
-
-    private static let nonIdempotentNames: Set<String> = [
-        "create",
-        "insert",
-        "append",
-        "publish",
-        "enqueue",
-        "post",
-        "send",
-        "stop",
-        "destroy",
-        "update",
-        // Server-app verbs — added from the isowords round (slot 13).
-        // `startDailyChallenge` was a real `INSERT` without `ON CONFLICT`
-        // that the prior lexicon missed on the default `replayable` tier.
-        "submit",
-        "start",
-        "complete",
-        "register",
-    ]
-
-    private static let idempotentNames: Set<String> = [
-        "upsert",
-        "setIfAbsent",
-        "replace",
-    ]
-
-    /// Returns the matched prefix when `name` is a non-idempotent
-    /// camelCase-composed name (e.g. `sendEmail`, `createUser`,
-    /// `publishEvent`). Returns `nil` when:
-    /// - `name` exactly equals a whitelist entry (handled by bare-name path)
-    /// - `name` starts with a whitelist entry but the next character is
-    ///   lowercase (e.g. `sending`, `sender`, `publisher`, `appending`,
-    ///   `creator`) — typically participle or noun forms, not mutation verbs
-    /// - `name` doesn't start with any whitelist entry
-    ///
-    /// The camel-case gate is the key precision mechanism. Swift methods
-    /// almost always camelCase, so `prefix + Uppercase` signals a composed
-    /// verb ("send-email", "create-user") while `prefix + lowercase`
-    /// signals a continuation of the prefix into a different word
-    /// ("send-ing", "publish-er").
-    private static func matchesNonIdempotentPrefix(_ name: String) -> String? {
-        for prefix in nonIdempotentNames {
-            guard name.hasPrefix(prefix), name.count > prefix.count else { continue }
-            let nextIndex = name.index(name.startIndex, offsetBy: prefix.count)
-            if name[nextIndex].isUppercase { return prefix }
-        }
         return nil
     }
 }

@@ -1,8 +1,7 @@
-diff --git a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
-index c633a61..98e1c35 100644
---- a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
-+++ b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
-@@ -423,7 +423,6 @@ extension ConstructionFacts {
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionFacts+LexicalScope.swift b/Sources/SwiftEffectInference/Internal/ConstructionFacts+LexicalScope.swift
+--- a/Sources/SwiftEffectInference/Internal/ConstructionFacts+LexicalScope.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionFacts+LexicalScope.swift
+@@ -44,7 +44,6 @@
                  // An extension names its type in full, so it restarts the qualification.
                  prefix = [name]
              } else {

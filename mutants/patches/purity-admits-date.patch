@@ -1,7 +1,7 @@
-diff --git a/Sources/SwiftEffectInference/PurityInferrer.swift b/Sources/SwiftEffectInference/PurityInferrer.swift
---- a/Sources/SwiftEffectInference/PurityInferrer.swift
-+++ b/Sources/SwiftEffectInference/PurityInferrer.swift
-@@ -470,7 +470,7 @@
+diff --git a/Sources/SwiftEffectInference/PurityInferrer+Markers.swift b/Sources/SwiftEffectInference/PurityInferrer+Markers.swift
+--- a/Sources/SwiftEffectInference/PurityInferrer+Markers.swift
++++ b/Sources/SwiftEffectInference/PurityInferrer+Markers.swift
+@@ -108,7 +108,7 @@
      private static let nondeterministicMarkers: Set<String> = Set([
          "arc4random", "arc4random_uniform", "drand48", "CFAbsoluteTimeGetCurrent",
          "random", "randomElement", "shuffled",

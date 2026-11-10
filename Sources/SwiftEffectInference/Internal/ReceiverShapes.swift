@@ -194,7 +194,10 @@ public enum ReceiverShapes {
         return nil
     }
 
-    private static func parameter(named name: String, in parameters: FunctionParameterListSyntax) -> FunctionParameterSyntax? {
+    private static func parameter(
+        named name: String,
+        in parameters: FunctionParameterListSyntax
+    ) -> FunctionParameterSyntax? {
         for param in parameters {
             let localName = param.secondName?.text ?? param.firstName.text
             if localName == name { return param }
@@ -242,7 +245,10 @@ public enum ReceiverShapes {
     /// deliberately doesn't chase further. Shared by `resolve` (layers 1 & 2,
     /// where the expression is the receiver) and `localBinding` (where it's
     /// an untyped binding's initializer).
-    private static func literalOrConstructorShape(_ expr: ExprSyntax, localTypes: Set<String>) -> ResolvedReceiverType? {
+    private static func literalOrConstructorShape(
+        _ expr: ExprSyntax,
+        localTypes: Set<String>
+    ) -> ResolvedReceiverType? {
         if expr.is(ArrayExprSyntax.self) { return classifyTypeName("Array", localTypes: localTypes) }
         if expr.is(DictionaryExprSyntax.self) { return classifyTypeName("Dictionary", localTypes: localTypes) }
         if expr.is(StringLiteralExprSyntax.self) { return classifyTypeName("String", localTypes: localTypes) }

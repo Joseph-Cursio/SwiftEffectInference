@@ -1,7 +1,7 @@
-diff --git a/Sources/SwiftEffectInference/PurityInferrer.swift b/Sources/SwiftEffectInference/PurityInferrer.swift
---- a/Sources/SwiftEffectInference/PurityInferrer.swift
-+++ b/Sources/SwiftEffectInference/PurityInferrer.swift
-@@ -472,7 +472,7 @@
+diff --git a/Sources/SwiftEffectInference/PurityInferrer+Markers.swift b/Sources/SwiftEffectInference/PurityInferrer+Markers.swift
+--- a/Sources/SwiftEffectInference/PurityInferrer+Markers.swift
++++ b/Sources/SwiftEffectInference/PurityInferrer+Markers.swift
+@@ -110,7 +110,7 @@
          "random", "randomElement", "shuffled",
          "Date", "UUID",
          // Compare against the current instant even when the calendar is handed in.

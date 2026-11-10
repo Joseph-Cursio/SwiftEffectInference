@@ -16,7 +16,7 @@ disabled_rules:
 
 # Opt-in rules — every opt-in lint rule except the ones logged in the
 # "SwiftLint Exclusions" notes (Obsidian: LLM inspired Projects / SwiftLint
-# notes). Those left out on purpose, by the notes' categories:
+# Rule Notes). Those left out on purpose, by the notes' categories:
 #   Fights Swift idioms:  explicit_acl, explicit_top_level_acl,
 #     explicit_type_interface, no_magic_numbers, prefixed_toplevel_constant,
 #     anonymous_argument_in_multiline_closure, switch_case_on_newline,
@@ -177,34 +177,6 @@ identifier_name:
     - id
     - lub
   max_length: 50
-
-# Relaxed thresholds — adopted from SwiftProjectLint, which originated the
-# code lifted in migration step 3. The inference engines are intentionally
-# longer than typical Swift code (long-tail classification logic + curated
-# framework tables).
-file_length:
-  warning: 600
-  error: 1000
-  ignore_comment_only_lines: true
-
-function_body_length:
-  warning: 100
-  error: 200
-
-type_body_length:
-  warning: 300
-  error: 500
-
-cyclomatic_complexity:
-  warning: 15
-  error: 25
-
-line_length:
-  warning: 120
-  error: 150
-  ignores_function_declarations: true
-  ignores_comments: true
-  ignores_urls: true
 
 # Adjustments — rules kept on and tuned (see "SwiftLint Adjustments").
 trailing_comma:

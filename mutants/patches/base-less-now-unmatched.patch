@@ -1,13 +1,12 @@
-diff --git a/Sources/SwiftEffectInference/PurityInferrer.swift b/Sources/SwiftEffectInference/PurityInferrer.swift
-index e379c2e..0e76bfb 100644
---- a/Sources/SwiftEffectInference/PurityInferrer.swift
-+++ b/Sources/SwiftEffectInference/PurityInferrer.swift
-@@ -250,7 +250,7 @@ public struct PurityInferrer: Sendable {
+diff --git a/Sources/SwiftEffectInference/PurityInferrer+Markers.swift b/Sources/SwiftEffectInference/PurityInferrer+Markers.swift
+--- a/Sources/SwiftEffectInference/PurityInferrer+Markers.swift
++++ b/Sources/SwiftEffectInference/PurityInferrer+Markers.swift
+@@ -168,7 +168,7 @@
      /// the caller handed in, which is the injection seam. A package type of its
      /// own with a `now` member is refuted along with the library's, which is the
      /// sound direction.
 -    private static let baseLessNondeterministicMarkers: Set<String> = ["now"]
 +    private static let baseLessNondeterministicMarkers: Set<String> = []
  
-     /// Returns `.pure` when `function` is referentially transparent — its
-     /// signature is synchronous and non-throwing, neither its body nor any
+     /// Any I/O, logging, persistence, clock or randomness marker anywhere in
+     /// `syntax` — by bare token, **or** by the module's own AST-precise

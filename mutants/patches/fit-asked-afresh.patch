@@ -1,8 +1,7 @@
-diff --git a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
-index ef66612..78746d8 100644
---- a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
-+++ b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Resolution.swift
-@@ -368,7 +368,6 @@ extension ConstructionFacts {
+diff --git a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Construction.swift b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Construction.swift
+--- a/Sources/SwiftEffectInference/Internal/ConstructionFacts+Construction.swift
++++ b/Sources/SwiftEffectInference/Internal/ConstructionFacts+Construction.swift
+@@ -70,7 +70,6 @@
      private func mayFit(_ call: CallShape, _ index: Int, depth: Int = 0) -> Bool {
          guard let memo = memo.instance else { return memoised().mayFit(call, index, depth: depth) }
          let key = FitKey(call: call, index: index, depth: depth)

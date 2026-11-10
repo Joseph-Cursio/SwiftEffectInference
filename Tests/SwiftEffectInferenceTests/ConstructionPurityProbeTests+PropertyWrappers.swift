@@ -6,9 +6,24 @@ extension ConstructionPurityProbeTests {
     // MARK: - Property wrappers and decoding
 
     @Test("a property wrapper declared in the package is constructed with its owner", arguments: [
-        "@propertyWrapper struct Logged { var wrappedValue: Int; init(wrappedValue: Int) { print(\"set\"); self.wrappedValue = wrappedValue } }\nstruct Counter { @Logged var count = 0 }\nfunc f() -> Counter { Counter() }",
-        "@propertyWrapper struct Stamped<V> { let at = Date(); var wrappedValue: V }\nstruct Model { @Stamped var x = 1 }\nfunc f() -> Model { Model() }",
-        "@propertyWrapper struct Now { var wrappedValue = UUID() }\nstruct Holder { @Now var id: UUID; let name: String }\nfunc f(_ n: String) -> Holder { Holder(name: n) }",
+        """
+        @propertyWrapper struct Logged {
+            var wrappedValue: Int
+            init(wrappedValue: Int) { print(\"set\"); self.wrappedValue = wrappedValue }
+        }
+        struct Counter { @Logged var count = 0 }
+        func f() -> Counter { Counter() }
+        """,
+        """
+        @propertyWrapper struct Stamped<V> { let at = Date(); var wrappedValue: V }
+        struct Model { @Stamped var x = 1 }
+        func f() -> Model { Model() }
+        """,
+        """
+        @propertyWrapper struct Now { var wrappedValue = UUID() }
+        struct Holder { @Now var id: UUID; let name: String }
+        func f(_ n: String) -> Holder { Holder(name: n) }
+        """,
     ])
     func propertyWrapperConstruction(source: String) throws {
         #expect(try refuted("f", in: source))
@@ -40,7 +55,12 @@ extension ConstructionPurityProbeTests {
         "func f(_ x: Item?) -> Item { x ?? .init(title: \"a\") }",
         "func f() -> [String: Item] { [\"a\": .init(title: \"x\")] }",
         "func f() -> (Item, Int) { (.init(title: \"x\"), 1) }",
-        "func f(_ c: Bool) -> String { let item: Item = if c { .init(title: \"a\") } else { .init(title: \"b\") }; return item.title }",
+        """
+        func f(_ c: Bool) -> String {
+            let item: Item = if c { .init(title: "a") } else { .init(title: "b") }
+            return item.title
+        }
+        """,
         "func f(_ r: Item = .init(title: \"x\")) -> String { r.title }",
     ])
     func contextualInitializerPositions(function: String) throws {
@@ -160,9 +180,19 @@ extension ConstructionPurityProbeTests {
         // An enum case's associated-value default.
         "enum Event { case opened(at: Date = Date()) }\nfunc f() -> Event { .opened() }",
         // A literal conversion.
-        "struct Tag: ExpressibleByStringLiteral { let id = UUID(); let text: String; init(stringLiteral v: String) { text = v } }\nfunc f() -> Tag { \"x\" }",
+        """
+        struct Tag: ExpressibleByStringLiteral {
+            let id = UUID(); let text: String
+            init(stringLiteral v: String) { text = v }
+        }
+        func f() -> Tag { \"x\" }
+        """,
         // A generic parameter constructed.
-        "protocol Makeable { init() }\nstruct Stamp2: Makeable { let id = UUID() }\nfunc f<T: Makeable>(_: T.Type) -> T { T() }",
+        """
+        protocol Makeable { init() }
+        struct Stamp2: Makeable { let id = UUID() }
+        func f<T: Makeable>(_: T.Type) -> T { T() }
+        """,
         // A property wrapper the package does not declare.
         "import SwiftUI\nstruct V { @AppStorage(\"k\") var n = 0 }\nfunc f() -> V { V() }",
     ])

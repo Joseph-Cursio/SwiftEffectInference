@@ -1,8 +1,7 @@
-diff --git a/Sources/SwiftEffectInference/Internal/TypeShapeCollector.swift b/Sources/SwiftEffectInference/Internal/TypeShapeCollector.swift
-index 0379716..a937ea5 100644
---- a/Sources/SwiftEffectInference/Internal/TypeShapeCollector.swift
-+++ b/Sources/SwiftEffectInference/Internal/TypeShapeCollector.swift
-@@ -153,7 +153,7 @@ struct RawDeclaration {
+diff --git a/Sources/SwiftEffectInference/Internal/RawDeclaration.swift b/Sources/SwiftEffectInference/Internal/RawDeclaration.swift
+--- a/Sources/SwiftEffectInference/Internal/RawDeclaration.swift
++++ b/Sources/SwiftEffectInference/Internal/RawDeclaration.swift
+@@ -153,7 +153,7 @@
          let delegates = Self.calls(declaration, on: .keyword(.self))
          let isConvenience = Self.isConvenience(declaration)
          var body: PurityRefutation?

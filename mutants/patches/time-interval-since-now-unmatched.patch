@@ -1,8 +1,7 @@
-diff --git a/Sources/SwiftEffectInference/PurityInferrer.swift b/Sources/SwiftEffectInference/PurityInferrer.swift
-index e379c2e..f01be64 100644
---- a/Sources/SwiftEffectInference/PurityInferrer.swift
-+++ b/Sources/SwiftEffectInference/PurityInferrer.swift
-@@ -208,7 +208,7 @@ public struct PurityInferrer: Sendable {
+diff --git a/Sources/SwiftEffectInference/PurityInferrer+Markers.swift b/Sources/SwiftEffectInference/PurityInferrer+Markers.swift
+--- a/Sources/SwiftEffectInference/PurityInferrer+Markers.swift
++++ b/Sources/SwiftEffectInference/PurityInferrer+Markers.swift
+@@ -126,7 +126,7 @@
      /// settings as they change. It is the default of every Foundation format style, so a default
      /// argument often spells it base-less: `locale: Locale = .autoupdatingCurrent`. No other type
      /// declares the name.

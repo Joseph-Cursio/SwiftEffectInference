@@ -1,6 +1,6 @@
-diff --git a/Sources/SwiftEffectInference/Internal/TypeShapeCollector.swift b/Sources/SwiftEffectInference/Internal/TypeShapeCollector.swift
---- a/Sources/SwiftEffectInference/Internal/TypeShapeCollector.swift
-+++ b/Sources/SwiftEffectInference/Internal/TypeShapeCollector.swift
+diff --git a/Sources/SwiftEffectInference/Internal/RawDeclaration.swift b/Sources/SwiftEffectInference/Internal/RawDeclaration.swift
+--- a/Sources/SwiftEffectInference/Internal/RawDeclaration.swift
++++ b/Sources/SwiftEffectInference/Internal/RawDeclaration.swift
 @@ -270,7 +270,6 @@
          final class Finder: SyntaxVisitor {
              var found: [String] = []

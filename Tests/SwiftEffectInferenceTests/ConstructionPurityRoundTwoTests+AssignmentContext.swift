@@ -51,10 +51,25 @@ extension ConstructionPurityRoundTwoTests {
         "struct T { let ids: [UUID] = [.init(), .init()]; let n: Int }\nfunc f(_ n: Int) -> T { T(n: n) }",
         "struct T { let ids: Set<UUID> = [.init()]; let n: Int }\nfunc f(_ n: Int) -> T { T(n: n) }",
         "struct T { var at: (Date, Int) = (.now, 0); let n: Int }\nfunc f(_ n: Int) -> T { T(n: n) }",
-        "typealias Timestamp = Date\nstruct T { var at: Timestamp = .now; let n: Int }\nfunc f(_ n: Int) -> T { T(n: n) }",
-        "typealias Instant = ContinuousClock.Instant\nfinal class T { var start: Instant = .now; init() {} }\nfunc f() -> T { T() }",
-        "typealias Timestamp = Date\nstruct T { let at: Timestamp; init(at: Timestamp = .now) { self.at = at } }\nfunc f() -> T { T() }",
-        "struct T { let stamps: [Date]; init(stamps: [Date] = [.now]) { self.stamps = stamps } }\nfunc f() -> T { T() }",
+        """
+        typealias Timestamp = Date
+        struct T { var at: Timestamp = .now; let n: Int }
+        func f(_ n: Int) -> T { T(n: n) }
+        """,
+        """
+        typealias Instant = ContinuousClock.Instant
+        final class T { var start: Instant = .now; init() {} }
+        func f() -> T { T() }
+        """,
+        """
+        typealias Timestamp = Date
+        struct T { let at: Timestamp; init(at: Timestamp = .now) { self.at = at } }
+        func f() -> T { T() }
+        """,
+        """
+        struct T { let stamps: [Date]; init(stamps: [Date] = [.now]) { self.stamps = stamps } }
+        func f() -> T { T() }
+        """,
     ])
     func nestedImplicitMembers(source: String) throws {
         #expect(try constructionRefuted("f", in: source), "\(source)")
@@ -218,7 +233,9 @@ extension ConstructionPurityRoundTwoTests {
     @Test("known over-refutations", arguments: [
         """
         struct DataPoint: Identifiable { let id = UUID(); let x: Double; let y: Double }
-        func f(in rect: CGRect) -> Path { var path = Path(); path.move(to: .init(x: rect.minX, y: rect.maxY)); return path }
+        func f(in rect: CGRect) -> Path {
+            var path = Path(); path.move(to: .init(x: rect.minX, y: rect.maxY)); return path
+        }
         """,
         """
         struct DataPoint: Identifiable { let id = UUID(); var x: Double; var y: Double }

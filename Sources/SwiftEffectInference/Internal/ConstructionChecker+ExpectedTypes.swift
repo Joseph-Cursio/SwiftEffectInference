@@ -27,26 +27,35 @@ extension ConstructionChecker {
             return sequenceExpectations(of: node, in: list, sequence: sequence)
         }
         if let infix = parent.as(InfixOperatorExprSyntax.self), infix.rightOperand.id == node.id {
-            if infix.operator.as(BinaryOperatorExprSyntax.self)?.operator.text == "??" {
-                return expectations(of: parent)
-            }
-            if infix.operator.is(AssignmentExprSyntax.self) { return assignmentTargets(infix.leftOperand) }
-            return []
+            return rightOperandExpectations(infix, parent)
         }
         if let literal = literalElementExpectations(of: node, parent) { return literal }
-        if let clause = parent.as(InitializerClauseSyntax.self) {
-            if let binding = clause.parent?.as(PatternBindingSyntax.self) {
-                return binding.typeAnnotation.map { [.type($0.type)] } ?? []
-            }
-            if let parameter = clause.parent?.as(FunctionParameterSyntax.self) { return [.type(parameter.type)] }
-            if let parameter = clause.parent?.as(EnumCaseParameterSyntax.self) { return [.type(parameter.type)] }
-            return []
-        }
+        if let clause = parent.as(InitializerClauseSyntax.self) { return initializerExpectations(clause) }
         if parent.is(ReturnStmtSyntax.self) { return Self.resultType(enclosing: parent).map { [.type($0)] } ?? [] }
         if let item = parent.as(CodeBlockItemSyntax.self), let list = item.parent?.as(CodeBlockItemListSyntax.self),
            list.count == 1 {
             return soleStatementExpectations(list)
         }
+        return []
+    }
+
+    /// A folded operator's right operand: through `??`, what the whole expression is; through `=`,
+    /// what the left side holds.
+    private func rightOperandExpectations(_ infix: InfixOperatorExprSyntax, _ parent: Syntax) -> [Expectation] {
+        if infix.operator.as(BinaryOperatorExprSyntax.self)?.operator.text == "??" {
+            return expectations(of: parent)
+        }
+        if infix.operator.is(AssignmentExprSyntax.self) { return assignmentTargets(infix.leftOperand) }
+        return []
+    }
+
+    /// A default value: what its binding, parameter or associated value is declared as.
+    private func initializerExpectations(_ clause: InitializerClauseSyntax) -> [Expectation] {
+        if let binding = clause.parent?.as(PatternBindingSyntax.self) {
+            return binding.typeAnnotation.map { [.type($0.type)] } ?? []
+        }
+        if let parameter = clause.parent?.as(FunctionParameterSyntax.self) { return [.type(parameter.type)] }
+        if let parameter = clause.parent?.as(EnumCaseParameterSyntax.self) { return [.type(parameter.type)] }
         return []
     }
 

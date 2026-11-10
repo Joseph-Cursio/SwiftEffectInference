@@ -1,8 +1,7 @@
-diff --git a/Sources/SwiftEffectInference/PurityInferrer.swift b/Sources/SwiftEffectInference/PurityInferrer.swift
-index e379c2e..23d90ad 100644
---- a/Sources/SwiftEffectInference/PurityInferrer.swift
-+++ b/Sources/SwiftEffectInference/PurityInferrer.swift
-@@ -757,7 +757,7 @@ public struct PurityInferrer: Sendable {
+diff --git a/Sources/SwiftEffectInference/PurityInferrer+Markers.swift b/Sources/SwiftEffectInference/PurityInferrer+Markers.swift
+--- a/Sources/SwiftEffectInference/PurityInferrer+Markers.swift
++++ b/Sources/SwiftEffectInference/PurityInferrer+Markers.swift
+@@ -337,7 +337,7 @@
          guard token.text == "formatted",
                let reference = token.parent?.as(DeclReferenceExprSyntax.self),
                let member = reference.parent?.as(MemberAccessExprSyntax.self),
