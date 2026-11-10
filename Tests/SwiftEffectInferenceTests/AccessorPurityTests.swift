@@ -23,6 +23,7 @@ struct AccessorPurityTests {
     private func accessor(in source: String) throws -> AccessorBlockSyntax {
         final class Finder: SyntaxVisitor {
             var found: AccessorBlockSyntax?
+
             override func visit(_ node: AccessorBlockSyntax) -> SyntaxVisitorContinueKind {
                 if found == nil { found = node }
                 return .skipChildren

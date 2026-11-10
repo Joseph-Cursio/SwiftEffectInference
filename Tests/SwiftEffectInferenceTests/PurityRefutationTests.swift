@@ -1,5 +1,5 @@
-import SwiftParser
 @testable import SwiftEffectInference
+import SwiftParser
 import SwiftSyntax
 import Testing
 
@@ -29,6 +29,7 @@ struct PurityRefutationTests {
     private func closure(in source: String) throws -> ClosureExprSyntax {
         final class Finder: SyntaxVisitor {
             var found: ClosureExprSyntax?
+
             override func visit(_ node: ClosureExprSyntax) -> SyntaxVisitorContinueKind {
                 if found == nil { found = node }
                 return .skipChildren
@@ -42,6 +43,7 @@ struct PurityRefutationTests {
     private func accessor(in source: String) throws -> AccessorBlockSyntax {
         final class Finder: SyntaxVisitor {
             var found: AccessorBlockSyntax?
+
             override func visit(_ node: AccessorBlockSyntax) -> SyntaxVisitorContinueKind {
                 if found == nil { found = node }
                 return .skipChildren
@@ -112,7 +114,7 @@ struct PurityRefutationTests {
         ("func f() -> Int { try! parse() }", .forcedTry),
         ("func f(_ x: Any) -> Int { x as! Int }", .forcedCast),
         ("func f() -> Int { fatalError(\"unreachable\") }", .trap("fatalError")),
-        ("func f(_ x: Int) -> Int { precondition(x > 0); return x }", .trap("precondition"))
+        ("func f(_ x: Int) -> Int { precondition(x > 0); return x }", .trap("precondition")),
     ])
     func partialityNamesTheTrap(source: String, expected: PurityRefutation.Partiality) throws {
         #expect(try inferrer.refutation(for: function(in: source)) == .partiality(expected))
@@ -276,7 +278,7 @@ struct PurityRefutationTests {
         (.fileRead("String(contentsOf:)"), "String(contentsOf:)"),
         (.partiality(.trap("fatalError")), "fatalError"),
         (.mutatesCapturedState("total"), "total"),
-        (.notAGetter("didSet"), "didSet")
+        (.notAGetter("didSet"), "didSet"),
     ])
     func descriptionNamesTheThing(refutation: PurityRefutation, needle: String) {
         #expect(refutation.description.contains(needle), "\(refutation)")

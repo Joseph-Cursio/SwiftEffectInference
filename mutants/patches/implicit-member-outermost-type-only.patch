@@ -1,7 +1,7 @@
-diff --git a/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift b/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
+diff --git a/Sources/SwiftEffectInference/Internal/TypeShapeCollector.swift b/Sources/SwiftEffectInference/Internal/TypeShapeCollector.swift
 index 1477ac8..78b3482 100644
---- a/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
-+++ b/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
+--- a/Sources/SwiftEffectInference/Internal/TypeShapeCollector.swift
++++ b/Sources/SwiftEffectInference/Internal/TypeShapeCollector.swift
 @@ -217,7 +217,7 @@ struct RawDeclaration {
          guard let type else { return nil }
          let members = implicitMembers(in: value)

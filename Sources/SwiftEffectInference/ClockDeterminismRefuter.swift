@@ -22,6 +22,47 @@ public struct AmbientTimeWitness: Sendable, Equatable {
     }
 }
 
+/// Finds the first ambient-time acquisition anywhere under a body, closures
+/// included, and stops.
+///
+/// First rather than all: the consumer is a lint rule, one witness settles the
+/// question, and walking on would cost a full traversal to report sites the
+/// author has to fix before the rule can pass anyway.
+private final class AmbientTimeCollector: SourceAccurateSyntaxVisitor {
+
+    private(set) var witness: AmbientTimeWitness?
+
+    override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
+        guard witness == nil else { return .skipChildren }
+        return record(NondeterminismSources.source(of: node))
+    }
+
+    override func visit(_ node: MemberAccessExprSyntax) -> SyntaxVisitorContinueKind {
+        guard witness == nil else { return .skipChildren }
+        return record(NondeterminismSources.source(of: node))
+    }
+
+    /// Every time-related kind refutes; the rest are discarded. A `UUID()` or a
+    /// `.shuffled()` in the body says nothing about whether the function varies
+    /// with wall-clock time, which is the whole of what the claim asserts —
+    /// refuting on them would contradict annotations that are honest about time.
+    ///
+    /// Listed exhaustively rather than by a negative test, so a kind added
+    /// upstream is a compile error here and gets a decision. The claim covers
+    /// monotonic clocks and timed suspension as well as wall time: a function
+    /// whose result depends on `mach_absolute_time()` or on how long it slept is
+    /// not clock-deterministic either, whatever clock did the measuring.
+    private static let refutingKinds: Set<NondeterminismSource.Kind> = [
+        .wallClockNow, .wallClockOffset, .monotonicClock, .clockAcquisition, .timedSuspension
+    ]
+
+    private func record(_ source: NondeterminismSource?) -> SyntaxVisitorContinueKind {
+        guard let source, Self.refutingKinds.contains(source.kind) else { return .visitChildren }
+        witness = AmbientTimeWitness(marker: source.marker, position: source.position)
+        return .skipChildren
+    }
+}
+
 /// Refutes `@ClockDeterministic` — and **only ever refutes it**.
 ///
 /// `@ClockDeterministic` claims *"my result does not vary with wall-clock time,
@@ -92,7 +133,7 @@ public struct AmbientTimeWitness: Sendable, Equatable {
 /// body is still this function reaching for a clock nobody passed in.
 public struct ClockDeterminismRefuter: Sendable {
 
-    public init() {}
+    public init() { /* spelled out only to make the no-argument initializer public */ }
 
     /// The witness that `function`'s body reaches for ambient time, or `nil` for
     /// **no opinion** — which is not the same as "clock-deterministic". A
@@ -143,47 +184,5 @@ public struct ClockDeterminismRefuter: Sendable {
         let collector = AmbientTimeCollector()
         collector.walk(syntax)
         return collector.witness
-    }
-
-}
-
-/// Finds the first ambient-time acquisition anywhere under a body, closures
-/// included, and stops.
-///
-/// First rather than all: the consumer is a lint rule, one witness settles the
-/// question, and walking on would cost a full traversal to report sites the
-/// author has to fix before the rule can pass anyway.
-private final class AmbientTimeCollector: SourceAccurateSyntaxVisitor {
-
-    private(set) var witness: AmbientTimeWitness?
-
-    override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
-        guard witness == nil else { return .skipChildren }
-        return record(NondeterminismSources.source(of: node))
-    }
-
-    override func visit(_ node: MemberAccessExprSyntax) -> SyntaxVisitorContinueKind {
-        guard witness == nil else { return .skipChildren }
-        return record(NondeterminismSources.source(of: node))
-    }
-
-    /// Every time-related kind refutes; the rest are discarded. A `UUID()` or a
-    /// `.shuffled()` in the body says nothing about whether the function varies
-    /// with wall-clock time, which is the whole of what the claim asserts —
-    /// refuting on them would contradict annotations that are honest about time.
-    ///
-    /// Listed exhaustively rather than by a negative test, so a kind added
-    /// upstream is a compile error here and gets a decision. The claim covers
-    /// monotonic clocks and timed suspension as well as wall time: a function
-    /// whose result depends on `mach_absolute_time()` or on how long it slept is
-    /// not clock-deterministic either, whatever clock did the measuring.
-    private static let refutingKinds: Set<NondeterminismSource.Kind> = [
-        .wallClockNow, .wallClockOffset, .monotonicClock, .clockAcquisition, .timedSuspension
-    ]
-
-    private func record(_ source: NondeterminismSource?) -> SyntaxVisitorContinueKind {
-        guard let source, Self.refutingKinds.contains(source.kind) else { return .visitChildren }
-        witness = AmbientTimeWitness(marker: source.marker, position: source.position)
-        return .skipChildren
     }
 }

@@ -1,7 +1,7 @@
+@testable import SwiftEffectInference
 import SwiftParser
 import SwiftSyntax
 import Testing
-@testable import SwiftEffectInference
 
 /// What classifying a call costs, on the shape that once made it cost the call's depth.
 ///
@@ -20,6 +20,7 @@ struct NondeterminismSourcesCostTests {
     static func chainCalls(links: Int) -> [FunctionCallExprSyntax] {
         final class Collector: SourceAccurateSyntaxVisitor {
             var calls: [FunctionCallExprSyntax] = []
+
             override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
                 calls.append(node)
                 return .visitChildren

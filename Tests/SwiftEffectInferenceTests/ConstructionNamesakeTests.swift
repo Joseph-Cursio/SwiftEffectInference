@@ -1,5 +1,5 @@
-import SwiftParser
 @testable import SwiftEffectInference
+import SwiftParser
 import Testing
 
 /// What `ConstructionFacts` says where one name is declared in many files — the shape of the swift
@@ -9,7 +9,7 @@ import Testing
 /// and the witness reported first among the namesakes: whatever makes such a package cheaper to
 /// build must leave both alone.
 @Suite("ConstructionFacts — namesakes")
-struct ConstructionNamesakeTests {
+struct ConstructionNamesakeTests: ConstructionTesting {
 
     /// `copies` files declaring `class A {}` and `class B: A`, whose body builds an `A` — so `B`'s
     /// superclass, and what its default builds, are every `A`. Halfway, an `A` reads the clock; at

@@ -1,7 +1,7 @@
+@testable import SwiftEffectInference
 import SwiftParser
 import SwiftSyntax
 import Testing
-@testable import SwiftEffectInference
 
 /// Characterization suite for `ReceiverShapes.resolve`.
 ///
@@ -17,6 +17,7 @@ struct ReceiverShapesTests {
         let tree = Parser.parse(source: source)
         final class Finder: SyntaxVisitor {
             var found: FunctionCallExprSyntax?
+
             override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
                 if found == nil { found = node }
                 return .visitChildren

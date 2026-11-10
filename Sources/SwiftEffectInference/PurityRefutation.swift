@@ -36,7 +36,7 @@ import SwiftSyntax
 /// A function can be impure for six reasons at once; reporting one true reason is
 /// what a diagnostic needs, and collecting all six would cost every consumer the
 /// early exits that `inferredEffect(for:)` exists to preserve.
-public enum PurityRefutation: Sendable, Equatable {
+public enum PurityRefutation: Sendable, Equatable, CustomStringConvertible {
 
     /// There is no body to inspect — a protocol requirement, or a `get`-only
     /// accessor declaration. Refuted for want of anything to read, not for
@@ -90,11 +90,11 @@ public enum PurityRefutation: Sendable, Equatable {
     /// Indirect and recursive because the interesting half is the cause: *`now`
     /// defaults to something that reads the clock* is the diagnostic, and
     /// *`now` has a bad default* is not.
-    indirect case refutingDefaultArgument(parameter: String, cause: PurityRefutation)
+    indirect case refutingDefaultArgument(parameter: String, cause: Self)
 
     /// Constructing a type runs code the body does not show — a stored property's default, the
     /// initializer the call reaches, or a superclass's — and that code refutes purity.
-    indirect case refutingConstruction(type: String, via: ConstructionStep, cause: PurityRefutation)
+    indirect case refutingConstruction(type: String, via: ConstructionStep, cause: Self)
 
     /// A `throws` function propagates an error out of a callee — a `try`
     /// anywhere in the body. The throw, and whatever else the callee does, come
@@ -126,7 +126,7 @@ public enum PurityRefutation: Sendable, Equatable {
     }
 
     /// Which trap breaks totality.
-    public enum Partiality: Sendable, Equatable {
+    public enum Partiality: Sendable, Equatable, CustomStringConvertible {
 
         /// `x!`
         case forceUnwrap
@@ -140,10 +140,16 @@ public enum PurityRefutation: Sendable, Equatable {
         /// `fatalError` / `precondition` / `assert` and family. Carries the
         /// callee as written.
         case trap(String)
-    }
-}
 
-extension PurityRefutation: CustomStringConvertible {
+        public var description: String {
+            switch self {
+            case .forceUnwrap: return "a force unwrap (`!`)"
+            case .forcedTry: return "a `try!`"
+            case .forcedCast: return "a forced cast (`as!`)"
+            case .trap(let callee): return "`\(callee)`"
+            }
+        }
+    }
 
     /// A one-line witness fit to put in a diagnostic.
     ///
@@ -176,21 +182,21 @@ extension PurityRefutation: CustomStringConvertible {
         case .partiality(let partiality):
             return "can trap: \(partiality)"
 
-        case .refutingDefaultArgument(let parameter, let cause):
+        case let .refutingDefaultArgument(parameter, cause):
             return "the default value of `\(parameter)` \(cause)"
 
-        case .refutingConstruction(let type, .storedProperty(let property), let cause):
+        case let .refutingConstruction(type, .storedProperty(property), cause):
             return "constructs `\(type)`, and the default value of its stored property `\(property)` \(cause)"
 
-        case .refutingConstruction(
-            let type, .initializer(let signature), .refutingDefaultArgument(let parameter, let cause)
+        case let .refutingConstruction(
+            type, .initializer(signature), .refutingDefaultArgument(parameter, cause)
         ):
             return "constructs `\(type)` through `\(signature)` without `\(parameter)`, whose default \(cause)"
 
-        case .refutingConstruction(let type, .initializer(let signature), let cause):
+        case let .refutingConstruction(type, .initializer(signature), cause):
             return "constructs `\(type)` through `\(signature)`, whose body \(cause)"
 
-        case .refutingConstruction(let type, .superclass(let base), let cause):
+        case let .refutingConstruction(type, .superclass(base), cause):
             return "constructs `\(type)`, a subclass of `\(base)`, which \(cause)"
 
         case .propagatedTry:
@@ -213,18 +219,6 @@ extension PurityRefutation: CustomStringConvertible {
         case .randomness: return "the system RNG"
         case .identity: return "a freshly generated identity"
         case .ambientEnvironment: return "the ambient environment"
-        }
-    }
-}
-
-extension PurityRefutation.Partiality: CustomStringConvertible {
-
-    public var description: String {
-        switch self {
-        case .forceUnwrap: return "a force unwrap (`!`)"
-        case .forcedTry: return "a `try!`"
-        case .forcedCast: return "a forced cast (`as!`)"
-        case .trap(let callee): return "`\(callee)`"
         }
     }
 }

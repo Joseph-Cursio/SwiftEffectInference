@@ -176,7 +176,7 @@ public enum CallSiteEffectInferrer {
     /// "suppress"** — only to mean "no rule here matched", which is what lets
     /// `resolve` chain it with `??`.
     private static func frameworkGatedInference(
-        call: FunctionCallExprSyntax,
+        call _: FunctionCallExprSyntax,
         calleeName: String,
         receiverName: String?,
         context: FrameworkContext
@@ -464,7 +464,7 @@ public enum CallSiteEffectInferrer {
         "increment", "decrement",
         "record", "recordNanoseconds",
         "observe",
-        "startTimer"
+        "startTimer",
     ]
 
     /// Matches Foundation/SwiftNIO codec receivers. Conservative: receiver
@@ -482,7 +482,7 @@ public enum CallSiteEffectInferrer {
     private static let loggerLevelMethods: Set<String> = [
         "trace", "debug", "info", "notice",
         "warning", "error", "critical", "fault",
-        "log"
+        "log",
     ]
 
     private static let nonIdempotentNames: Set<String> = [
@@ -502,13 +502,13 @@ public enum CallSiteEffectInferrer {
         "submit",
         "start",
         "complete",
-        "register"
+        "register",
     ]
 
     private static let idempotentNames: Set<String> = [
         "upsert",
         "setIfAbsent",
-        "replace"
+        "replace",
     ]
 
     /// Returns the matched prefix when `name` is a non-idempotent

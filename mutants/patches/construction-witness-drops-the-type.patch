@@ -1,7 +1,7 @@
-diff --git a/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift b/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
+diff --git a/Sources/SwiftEffectInference/Internal/TypeShapeCollector.swift b/Sources/SwiftEffectInference/Internal/TypeShapeCollector.swift
 index 0379716..63ec68f 100644
---- a/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
-+++ b/Sources/SwiftEffectInference/Internal/ConstructionCollector.swift
+--- a/Sources/SwiftEffectInference/Internal/TypeShapeCollector.swift
++++ b/Sources/SwiftEffectInference/Internal/TypeShapeCollector.swift
 @@ -89,7 +89,7 @@ struct RawDeclaration {
          var conditional: PurityRefutation?
          var omitted: [OmittedDefault] = []

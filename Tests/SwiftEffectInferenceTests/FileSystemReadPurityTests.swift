@@ -1,7 +1,7 @@
+@testable import SwiftEffectInference
 import SwiftParser
 import SwiftSyntax
 import Testing
-@testable import SwiftEffectInference
 
 /// A file read is an impurity whether or not its `throws` survives to the signature.
 ///

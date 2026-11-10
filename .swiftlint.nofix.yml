@@ -1,0 +1,12 @@
+# Stack this on the fix pass only:
+#   swiftlint --fix --config .swiftlint.yml --config .swiftlint.nofix.yml
+# The rules below stay on for `swiftlint lint`, but their correctors are wrong
+# in cases found here (see the "SwiftLint Never Autofix" notes):
+# - unused_parameter rewrites an operator's `(lhs: T, rhs: T)` to
+#   `(lhs _: T, rhs _: T)`, which does not compile.
+# - trailing_closure turns a labeled closure argument into a trailing closure
+#   but leaves `)` stranded on its own line before a run of spaces. Convert
+#   those by hand: `f(x) { ... }`.
+disabled_rules:
+  - unused_parameter
+  - trailing_closure

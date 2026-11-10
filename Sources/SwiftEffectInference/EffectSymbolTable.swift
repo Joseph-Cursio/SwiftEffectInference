@@ -1,5 +1,79 @@
 import SwiftSyntax
 
+/// Origin of an effect resolution, used by consumers (SPL for diagnostic
+/// prose, SwiftInfer for explainability blocks) to distinguish declared
+/// effects from inferred ones.
+public enum EffectProvenance: Sendable, Equatable {
+    case declared
+    case bodyInferred(depth: Int)
+    case callSite(reason: String)
+}
+
+// MARK: - Visitors (internal)
+
+/// Collects every `FunctionDeclSyntax` in a source file. The shared core only
+/// tracks effects; the execution-context axis (`@lint.context`) is a linting
+/// concern and lives in its consumer.
+///
+/// Descent stops at closure expressions. A declaration written inside a closure
+/// body cannot be called by name from outside it, so registering it would put a
+/// signature in the table that no call site can legitimately resolve to — and,
+/// worse, could collide with a real top-level declaration of the same shape.
+/// `BodyEffectInferrer`'s collectors already stop at closures; these now agree.
+final class FunctionDeclCollector: SourceAccurateSyntaxVisitor {
+
+    var functions: [FunctionDeclSyntax] = []
+
+    override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
+        functions.append(node)
+        return .visitChildren
+    }
+
+    override func visit(_: ClosureExprSyntax) -> SyntaxVisitorContinueKind {
+        .skipChildren
+    }
+}
+
+/// Collects closure-typed property declarations that participate in the
+/// pseudo-method registration path (`var search: @Sendable () -> Void`,
+/// `let handler = { ... }`). Stops at closure expressions for the same reason
+/// as `FunctionDeclCollector`.
+final class ClosurePropertyDeclCollector: SourceAccurateSyntaxVisitor {
+
+    var properties: [VariableDeclSyntax] = []
+
+    override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
+        properties.append(node)
+        return .visitChildren
+    }
+
+    override func visit(_: ClosureExprSyntax) -> SyntaxVisitorContinueKind {
+        .skipChildren
+    }
+}
+
+/// `true` if `decl` lives inside a function body, initializer, deinit, or
+/// accessor. Function-local closure bindings can't be called by name from
+/// outside their enclosing scope, so they don't participate in the
+/// pseudo-method registration path.
+///
+/// Public because consumers building their own inference passes over the same
+/// declarations need to apply the identical exclusion — `SwiftProjectLint`'s
+/// upward inferrer being the motivating case.
+public func isFunctionLocal(_ decl: VariableDeclSyntax) -> Bool {
+    var current: Syntax? = Syntax(decl).parent
+    while let node = current {
+        if node.is(FunctionDeclSyntax.self) ||
+           node.is(InitializerDeclSyntax.self) ||
+           node.is(DeinitializerDeclSyntax.self) ||
+           node.is(AccessorDeclSyntax.self) {
+            return true
+        }
+        current = node.parent
+    }
+    return false
+}
+
 /// Cross-file declared+inferred effect lookup. Keys entries on
 /// `FunctionSignature` (the canonical bare-receiver form
 /// `name(label1:label2:…)`), so two declarations collide only if they
@@ -67,12 +141,12 @@ public struct EffectSymbolTable: Sendable {
     /// keying the lookup on equality alone silently misses it.
     private var shapesByName: [String: [(shape: DeclarationShape, effect: Effect)]] = [:]
 
-    public init() {}
+    public init() { /* spelled out only to make the no-argument initializer public */ }
 
     /// Builds a symbol table by walking every annotated function and
     /// closure-typed property in the source.
-    public static func build(from source: SourceFileSyntax) -> EffectSymbolTable {
-        var table = EffectSymbolTable()
+    public static func build(from source: SourceFileSyntax) -> Self {
+        var table = Self()
         table.merge(source: source, parser: EffectAnnotationParser())
         return table
     }
@@ -333,34 +407,31 @@ public struct EffectSymbolTable: Sendable {
     ) {
         for source in sources {
             if ContinuousClock.now >= deadline { return }
-            let inferred = BodyEffectInferrer.inferEffects(
-                in: source,
-                resolveCalleeEffect: { call in
-                    if let sig = FunctionSignature.from(call: call) {
-                        if isCollision(signature: sig) { return nil }
-                        if let declared = self.effect(for: sig) {
-                            // The one anchor a human wrote. Everything that
-                            // reaches a conclusion through here, and only
-                            // through here, is annotation-backed.
-                            return BodyInference(effect: declared, depth: 0, anchor: .declared)
-                        }
-                        if includeUpward, let upward = self.upwardInference(for: sig) {
-                            // Inherits whatever the prior pass established —
-                            // an anchor is a property of the whole chain, so a
-                            // multi-hop result is only as clean as the step it
-                            // stood on.
-                            return upward
-                        }
+            let inferred = BodyEffectInferrer.inferEffects(in: source) { call in
+                if let sig = FunctionSignature.from(call: call) {
+                    if isCollision(signature: sig) { return nil }
+                    if let declared = effect(for: sig) {
+                        // The one anchor a human wrote. Everything that
+                        // reaches a conclusion through here, and only
+                        // through here, is annotation-backed.
+                        return BodyInference(effect: declared, depth: 0, anchor: .declared)
                     }
-                    if let heuristic = heuristicEffectForCall(call, source) {
-                        // A name or framework match. Correct often enough to be
-                        // worth having and wrong often enough that a consumer
-                        // must be able to decline it.
-                        return BodyInference(effect: heuristic, depth: 0, anchor: .heuristic)
+                    if includeUpward, let upward = upwardInference(for: sig) {
+                        // Inherits whatever the prior pass established —
+                        // an anchor is a property of the whole chain, so a
+                        // multi-hop result is only as clean as the step it
+                        // stood on.
+                        return upward
                     }
-                    return nil
                 }
-            )
+                if let heuristic = heuristicEffectForCall(call, source) {
+                    // A name or framework match. Correct often enough to be
+                    // worth having and wrong often enough that a consumer
+                    // must be able to decline it.
+                    return BodyInference(effect: heuristic, depth: 0, anchor: .heuristic)
+                }
+                return nil
+            }
             for (sig, result) in inferred {
                 guard entriesBySignature[sig]?.effect == nil else { continue }
                 let cappedDepth = min(maxHops, result.depth)
@@ -402,78 +473,4 @@ public struct EffectSymbolTable: Sendable {
         }
         return BodyInference(effect: mergedEffect, depth: mergedDepth, anchor: mergedAnchor)
     }
-}
-
-/// Origin of an effect resolution, used by consumers (SPL for diagnostic
-/// prose, SwiftInfer for explainability blocks) to distinguish declared
-/// effects from inferred ones.
-public enum EffectProvenance: Sendable, Equatable {
-    case declared
-    case bodyInferred(depth: Int)
-    case callSite(reason: String)
-}
-
-// MARK: - Visitors (internal)
-
-/// Collects every `FunctionDeclSyntax` in a source file. The shared core only
-/// tracks effects; the execution-context axis (`@lint.context`) is a linting
-/// concern and lives in its consumer.
-///
-/// Descent stops at closure expressions. A declaration written inside a closure
-/// body cannot be called by name from outside it, so registering it would put a
-/// signature in the table that no call site can legitimately resolve to — and,
-/// worse, could collide with a real top-level declaration of the same shape.
-/// `BodyEffectInferrer`'s collectors already stop at closures; these now agree.
-final class FunctionDeclCollector: SourceAccurateSyntaxVisitor {
-
-    var functions: [FunctionDeclSyntax] = []
-
-    override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
-        functions.append(node)
-        return .visitChildren
-    }
-
-    override func visit(_ node: ClosureExprSyntax) -> SyntaxVisitorContinueKind {
-        .skipChildren
-    }
-}
-
-/// Collects closure-typed property declarations that participate in the
-/// pseudo-method registration path (`var search: @Sendable () -> Void`,
-/// `let handler = { ... }`). Stops at closure expressions for the same reason
-/// as `FunctionDeclCollector`.
-final class ClosurePropertyDeclCollector: SourceAccurateSyntaxVisitor {
-
-    var properties: [VariableDeclSyntax] = []
-
-    override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
-        properties.append(node)
-        return .visitChildren
-    }
-
-    override func visit(_ node: ClosureExprSyntax) -> SyntaxVisitorContinueKind {
-        .skipChildren
-    }
-}
-
-/// `true` if `decl` lives inside a function body, initializer, deinit, or
-/// accessor. Function-local closure bindings can't be called by name from
-/// outside their enclosing scope, so they don't participate in the
-/// pseudo-method registration path.
-///
-/// Public because consumers building their own inference passes over the same
-/// declarations need to apply the identical exclusion — `SwiftProjectLint`'s
-/// upward inferrer being the motivating case.
-public func isFunctionLocal(_ decl: VariableDeclSyntax) -> Bool {
-    var current: Syntax? = Syntax(decl).parent
-    while let node = current {
-        if node.is(FunctionDeclSyntax.self) ||
-           node.is(InitializerDeclSyntax.self) ||
-           node.is(DeinitializerDeclSyntax.self) ||
-           node.is(AccessorDeclSyntax.self) {
-            return true
-        }
-        current = node.parent
-    }
-    return false
 }

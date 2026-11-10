@@ -51,12 +51,12 @@ public enum StdlibIdempotentMutations {
         return excluded.contains(TypeMethodPair(type: typeName, method: method))
     }
 
-    fileprivate struct TypeMethodPair: Hashable {
+    private struct TypeMethodPair: Hashable {
         let type: String
         let method: String
     }
 
-    fileprivate static let excluded: Set<TypeMethodPair> = [
+    private static let excluded: Set<TypeMethodPair> = [
         // Array — local-mutation methods.
         TypeMethodPair(type: "Array", method: "append"),
         TypeMethodPair(type: "Array", method: "insert"),
@@ -78,6 +78,6 @@ public enum StdlibIdempotentMutations {
 
         // Dictionary — key-addressed mutation is replay-safe.
         TypeMethodPair(type: "Dictionary", method: "removeValue"),
-        TypeMethodPair(type: "Dictionary", method: "updateValue")
+        TypeMethodPair(type: "Dictionary", method: "updateValue"),
     ]
 }

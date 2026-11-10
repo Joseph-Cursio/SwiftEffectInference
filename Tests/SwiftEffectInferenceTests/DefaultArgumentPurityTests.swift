@@ -1,7 +1,7 @@
+@testable import SwiftEffectInference
 import SwiftParser
 import SwiftSyntax
 import Testing
-@testable import SwiftEffectInference
 
 /// A default argument is code the function runs, on exactly the calls that omit
 /// it — so it is part of the purity question, and it was missing from the answer.
@@ -112,7 +112,7 @@ struct DefaultArgumentPurityTests {
         // The closure runs on the calls that omit it, through the body that calls it.
         "func stamp(_ id: Int, clock: () -> Date = { .init() }) -> String { \"\\(id)@\\(clock())\" }",
         // `FileHandle.standardError` refutes with its base written, and so without it.
-        "func log(_ line: String, to handle: FileHandle = .standardError) -> Int { line.count }"
+        "func log(_ line: String, to handle: FileHandle = .standardError) -> Int { line.count }",
     ])
     func implicitMemberInDefaultArgument(source: String) throws {
         #expect(inferrer.verdict(for: try firstFunction(in: source)) == .refuted, "\(source)")
@@ -132,7 +132,7 @@ struct DefaultArgumentPurityTests {
     @Test("a parameter type is not judged without an implicit member in its own default", arguments: [
         "func stamp(_ id: Int, order: SortOrder = .forward, at moment: Date) -> String { \"\\(id)\" }",
         "func stamp(_ id: Int, since start: Date = Self.epoch) -> String { \"\\(id)\" }",
-        "func log(_ line: String, to handle: FileHandle = Self.handle) -> Int { line.count }"
+        "func log(_ line: String, to handle: FileHandle = Self.handle) -> Int { line.count }",
     ])
     func typeWithoutImplicitMemberStaysPure(source: String) throws {
         #expect(inferrer.verdict(for: try firstFunction(in: source)) == .pure, "\(source)")

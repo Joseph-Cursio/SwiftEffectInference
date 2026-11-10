@@ -1,5 +1,65 @@
 import SwiftSyntax
 
+/// A lookup's arguments, with the site replaced by what of it the resolution reads.
+///
+/// A resolution reads the site's enclosing types and function-like bodies (the chain, the bodies
+/// crossed), and — for shadowing — the generic parameters of the site and its ancestors and every
+/// statement list around it. Nothing else. So two sites below the same innermost such node
+/// resolve every spelling alike, and that node, with whether the site *is* it (the chain starts
+/// above the site, shadowing at it), is the key.
+struct LookupKey: Hashable, Sendable {
+    let components: [String]
+    let scope: Syntax?
+    let siteIsScope: Bool
+    let depth: Int
+    let aliasesSeen: Set<String>
+
+    init(components: [String], site: Syntax?, depth: Int, aliasesSeen: Set<String>) {
+        self.components = components
+        self.depth = depth
+        self.aliasesSeen = aliasesSeen
+        var current = site
+        while let node = current, !Self.isRead(node) { current = node.parent }
+        scope = current
+        siteIsScope = current != nil && current == site
+    }
+
+    /// Whether a resolution reads `node` when it encloses a site: a type declaration or extension,
+    /// a function-like body, or a statement list.
+    private static func isRead(_ node: Syntax) -> Bool {
+        switch node.kind {
+        case .structDecl, .classDecl, .actorDecl, .enumDecl, .protocolDecl, .extensionDecl,
+             .functionDecl, .initializerDecl, .deinitializerDecl, .accessorBlock, .subscriptDecl,
+             .closureExpr, .codeBlockItemList:
+            return true
+
+        default:
+            return false
+        }
+    }
+}
+
+/// One way decoding a declaration reaches another: through its superclass, or a stored property.
+struct DecodeEdge: Sendable {
+    let step: PurityRefutation.ConstructionStep
+    let held: Int
+}
+
+/// Whether the declaration at `index` can take `call`, asked `depth` superclasses up.
+struct FitKey: Hashable {
+    let call: CallShape
+    let index: Int
+    let depth: Int
+}
+
+/// What `T.init(labels…)` as a function value runs, asked of the declaration at `index`, `depth`
+/// superclasses up.
+struct ReferenceKey: Hashable {
+    let index: Int
+    let labels: [String]?
+    let depth: Int
+}
+
 /// What `ConstructionFacts` has already worked out, so that no question is answered twice — never
 /// part of what the table says.
 ///
@@ -44,7 +104,8 @@ final class ConstructionMemo: @unchecked Sendable {
         var instance: ConstructionMemo?
         /// What the build resolved, handed on with the table it returns.
         var settled = Settled()
-        static func == (lhs: Slot, rhs: Slot) -> Bool { true }
+
+        static func == (_: Self, _: Self) -> Bool { true }
     }
 
     /// The build's answers about names, kept on the table it returns: a name means after the build
@@ -110,63 +171,4 @@ final class ConstructionMemo: @unchecked Sendable {
         resolving.remove(key)
         lookups[key] = found
     }
-}
-
-/// A lookup's arguments, with the site replaced by what of it the resolution reads.
-///
-/// A resolution reads the site's enclosing types and function-like bodies (the chain, the bodies
-/// crossed), and — for shadowing — the generic parameters of the site and its ancestors and every
-/// statement list around it. Nothing else. So two sites below the same innermost such node
-/// resolve every spelling alike, and that node, with whether the site *is* it (the chain starts
-/// above the site, shadowing at it), is the key.
-struct LookupKey: Hashable, Sendable {
-    let components: [String]
-    let scope: Syntax?
-    let siteIsScope: Bool
-    let depth: Int
-    let aliasesSeen: Set<String>
-
-    init(components: [String], site: Syntax?, depth: Int, aliasesSeen: Set<String>) {
-        self.components = components
-        self.depth = depth
-        self.aliasesSeen = aliasesSeen
-        var current = site
-        while let node = current, !Self.isRead(node) { current = node.parent }
-        scope = current
-        siteIsScope = current != nil && current == site
-    }
-
-    /// Whether a resolution reads `node` when it encloses a site: a type declaration or extension,
-    /// a function-like body, or a statement list.
-    private static func isRead(_ node: Syntax) -> Bool {
-        switch node.kind {
-        case .structDecl, .classDecl, .actorDecl, .enumDecl, .protocolDecl, .extensionDecl,
-             .functionDecl, .initializerDecl, .deinitializerDecl, .accessorBlock, .subscriptDecl,
-             .closureExpr, .codeBlockItemList:
-            return true
-        default:
-            return false
-        }
-    }
-}
-
-/// One way decoding a declaration reaches another: through its superclass, or a stored property.
-struct DecodeEdge: Sendable {
-    let step: PurityRefutation.ConstructionStep
-    let held: Int
-}
-
-/// Whether the declaration at `index` can take `call`, asked `depth` superclasses up.
-struct FitKey: Hashable {
-    let call: CallShape
-    let index: Int
-    let depth: Int
-}
-
-/// What `T.init(labels…)` as a function value runs, asked of the declaration at `index`, `depth`
-/// superclasses up.
-struct ReferenceKey: Hashable {
-    let index: Int
-    let labels: [String]?
-    let depth: Int
 }

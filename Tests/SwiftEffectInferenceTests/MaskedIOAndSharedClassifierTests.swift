@@ -1,7 +1,7 @@
+@testable import SwiftEffectInference
 import SwiftParser
 import SwiftSyntax
 import Testing
-@testable import SwiftEffectInference
 
 /// Two holes in the marker sets, closed together because the same census found
 /// both and they fail the same way: the oracle claimed `.pure` for code that
@@ -51,7 +51,7 @@ struct MaskedIOAndSharedClassifierTests {
     @Test("writing to standard error is not pure, even without throws", arguments: [
         #"func f(_ t: String) { FileHandle.standardError.write(Data((t + "\n").utf8)) }"#,
         "func f() -> Process { let p = Process(); p.arguments = []; return p }",
-        "func f() -> Pipe { Pipe() }"
+        "func f() -> Pipe { Pipe() }",
     ])
     func holeOne(source: String) throws {
         #expect(try verdict(source) == .refuted)
@@ -66,7 +66,7 @@ struct MaskedIOAndSharedClassifierTests {
         "func f() -> UInt64 { mach_absolute_time() }",
         "func f() -> Int32 { gettimeofday(nil, nil) }",
         "func f() -> String? { Locale.current.languageCode }",
-        "func f() -> Int { TimeZone.current.secondsFromGMT() }"
+        "func f() -> Int { TimeZone.current.secondsFromGMT() }",
     ])
     func holeTwo(source: String) throws {
         #expect(try verdict(source) == .refuted)
@@ -105,7 +105,7 @@ struct MaskedIOAndSharedClassifierTests {
         "func f(_ a: Int, _ b: Int) -> Int { a + b }",
         "func f(_ xs: [Int]) -> [Int] { xs.map { $0 * 2 } }",
         "func f(_ s: String) -> String { s.uppercased() }",
-        "func f(_ xs: [Int]) -> Int { xs.reduce(0, +) }"
+        "func f(_ xs: [Int]) -> Int { xs.reduce(0, +) }",
     ])
     func pureCodeStaysPure(source: String) throws {
         #expect(try verdict(source) == .pure)

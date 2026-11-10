@@ -1,7 +1,7 @@
+@testable import SwiftEffectInference
 import SwiftParser
 import SwiftSyntax
 import Testing
-@testable import SwiftEffectInference
 
 /// Behavioural suite for `BodyEffectInferrer.inferEffects` — the single-pass,
 /// resolver-driven core of upward (body-based) inference.
@@ -48,7 +48,7 @@ struct BodyEffectInferrerTests {
         }
         """, resolving: [
             "logSomething": anchor(.observational),
-            "saveRecord": anchor(.nonIdempotent)
+            "saveRecord": anchor(.nonIdempotent),
         ])
 
         #expect(inferred[sig("doWork")]?.effect == .nonIdempotent)
@@ -90,7 +90,7 @@ struct BodyEffectInferrerTests {
             "shallowStrong": anchor(.nonIdempotent, depth: 1),
             // Higher depth but lower rank — walked and counted, but its depth
             // must not contribute since it isn't at the lub rank.
-            "deepWeak": anchor(.observational, depth: 5)
+            "deepWeak": anchor(.observational, depth: 5),
         ])
 
         #expect(inferred[sig("doWork")]?.effect == .nonIdempotent)
@@ -120,7 +120,7 @@ struct BodyEffectInferrerTests {
         }
         """, resolving: [
             "inner": anchor(.observational),
-            "saveRecord": anchor(.nonIdempotent)
+            "saveRecord": anchor(.nonIdempotent),
         ])
 
         // `outer` sees the `inner()` call but must not walk into `inner`'s

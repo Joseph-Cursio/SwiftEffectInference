@@ -1,7 +1,7 @@
+@testable import SwiftEffectInference
 import SwiftParser
 import SwiftSyntax
 import Testing
-@testable import SwiftEffectInference
 
 /// Purity, asked of a closure literal.
 ///
@@ -20,6 +20,7 @@ struct ClosurePurityTests {
     private func closure(in source: String) throws -> ClosureExprSyntax {
         final class Finder: SyntaxVisitor {
             var found: ClosureExprSyntax?
+
             override func visit(_ node: ClosureExprSyntax) -> SyntaxVisitorContinueKind {
                 if found == nil { found = node }
                 return .skipChildren
@@ -202,7 +203,7 @@ struct ClosurePurityTests {
         for source in [
             "items.forEach { item in print(item) }",
             "let stamped = items.map { item in Date() }",
-            "let names = items.map { item in item.name! }"
+            "let names = items.map { item in item.name! }",
         ] {
             #expect(try isPure(source) == false)
             #expect(try mutatesCapture(source) == false)

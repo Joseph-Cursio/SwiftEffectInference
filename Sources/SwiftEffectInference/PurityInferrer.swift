@@ -39,6 +39,286 @@ public enum PurityVerdict: Sendable, Equatable {
     case refuted
 }
 
+/// Finds any nondeterminism source this module's shared classifier recognises.
+///
+/// The classifier is consulted rather than re-derived: `NondeterminismSources`
+/// is the type this package extracted so that "does this reach for ambient
+/// time" has one implementation, and a purity oracle carrying a fourth copy of
+/// the answer would be the drift that extraction exists to prevent.
+///
+/// Both overloads are needed. `source(of: FunctionCallExprSyntax)` catches
+/// `ContinuousClock()`, `mach_absolute_time()`, `DispatchTime.now()`;
+/// `source(of: MemberAccessExprSyntax)` catches the property forms —
+/// `SuspendingClock.now`, `Locale.current`, `TimeZone.current` — which are not
+/// calls at all and which a call-only walk misses entirely.
+private final class NondeterminismChecker: SourceAccurateSyntaxVisitor {
+
+    /// The **first** source seen, which is the one a diagnostic names. The walk is
+    /// not short-circuited — it never was — so keeping the first rather than the
+    /// last costs nothing and makes the witness independent of tree order below
+    /// the first hit.
+    private(set) var source: NondeterminismSource?
+
+    override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
+        if source == nil { source = NondeterminismSources.source(of: node) }
+        return .visitChildren
+    }
+
+    override func visit(_ node: MemberAccessExprSyntax) -> SyntaxVisitorContinueKind {
+        if source == nil { source = NondeterminismSources.source(of: node) }
+        return .visitChildren
+    }
+}
+
+/// Detects a file read spelled `SomeType(contentsOf:)`.
+///
+/// `contentsOf` cannot be matched as a bare token: it is the argument label of
+/// `append(contentsOf:)` and `insert(contentsOf:)`, so a token match refutes
+/// every pure function that appends one collection to another. Matching the
+/// *callee* separates them — `String(contentsOf: url)` names a file-reading
+/// type, `array.append(contentsOf: other)` does not.
+private final class FileReadChecker: SourceAccurateSyntaxVisitor {
+
+    /// Types whose `init(contentsOf:)` reads from a URL or path. `String` and
+    /// `Data` are deliberately absent from `sideEffectMarkers` because naming
+    /// them as bare tokens would refute nearly everything; naming them here is
+    /// safe, because the match also requires the `contentsOf` label.
+    private static let fileReadingTypes: Set<String> = [
+        "String", "Data", "NSString", "NSData", "NSDictionary", "NSArray"
+    ]
+
+    /// The first read seen, spelled as the diagnostic wants it —
+    /// `"String(contentsOf:)"`.
+    private(set) var fileRead: String?
+
+    override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
+        guard let callee = node.calledExpression.as(DeclReferenceExprSyntax.self),
+              Self.fileReadingTypes.contains(callee.baseName.text),
+              node.arguments.contains(where: { $0.label?.text == "contentsOf" })
+        else { return .visitChildren }
+        if fileRead == nil { fileRead = "\(callee.baseName.text)(contentsOf:)" }
+        return .visitChildren
+    }
+}
+
+/// Detects a base-less member — `.now`, `.init()`, `.standardError` — which takes its type from
+/// whatever the code around it declares.
+final class ImplicitMemberChecker: SourceAccurateSyntaxVisitor {
+
+    private(set) var found = false
+
+    override func visit(_ node: MemberAccessExprSyntax) -> SyntaxVisitorContinueKind {
+        if node.base == nil { found = true }
+        return found ? .skipChildren : .visitChildren
+    }
+}
+
+/// Detects any `try` — the mark of a throw propagated from a callee rather than
+/// raised by the function itself.
+private final class TryExpressionChecker: SourceAccurateSyntaxVisitor {
+
+    private(set) var sawTry = false
+
+    override func visit(_: TryExprSyntax) -> SyntaxVisitorContinueKind {
+        sawTry = true
+        return .skipChildren
+    }
+}
+
+/// Walks a function body looking for any runtime trap that breaks totality.
+private final class TotalityChecker: SourceAccurateSyntaxVisitor {
+
+    /// The first trap seen, or `nil` when the body is total. Which trap it is, not
+    /// merely that there is one: `x!` and `fatalError("unreachable")` call for
+    /// different advice, and the second names its own callee.
+    private(set) var trap: PurityRefutation.Partiality?
+
+    /// Standard-library trap functions: reaching them means the function has no
+    /// return value for some inputs.
+    private static let trapFunctions: Set<String> = [
+        "fatalError", "preconditionFailure", "precondition",
+        "assert", "assertionFailure",
+    ]
+
+    private func record(_ partiality: PurityRefutation.Partiality) {
+        if trap == nil { trap = partiality }
+    }
+
+    override func visit(_ node: ForceUnwrapExprSyntax) -> SyntaxVisitorContinueKind {
+        _ = node
+        record(.forceUnwrap)
+        return .skipChildren
+    }
+
+    override func visit(_ node: TryExprSyntax) -> SyntaxVisitorContinueKind {
+        if node.questionOrExclamationMark?.text == "!" { record(.forcedTry) }
+        return .visitChildren
+    }
+
+    override func visit(_ node: AsExprSyntax) -> SyntaxVisitorContinueKind {
+        if node.questionOrExclamationMark?.text == "!" { record(.forcedCast) }
+        return .visitChildren
+    }
+
+    // Raw (unfolded) parse trees represent `x as! T` as an `UnresolvedAsExprSyntax`
+    // inside a `SequenceExprSyntax`; the folded `AsExprSyntax` form only appears
+    // after operator-precedence folding, which the linter doesn't run.
+    override func visit(_ node: UnresolvedAsExprSyntax) -> SyntaxVisitorContinueKind {
+        if node.questionOrExclamationMark?.text == "!" { record(.forcedCast) }
+        return .visitChildren
+    }
+
+    override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
+        if let callee = node.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+           Self.trapFunctions.contains(callee) {
+            record(.trap(callee))
+        }
+        return .visitChildren
+    }
+}
+
+/// Detects a closure assigning to something it captured rather than declared.
+///
+/// A capture that is only *read* becomes a parameter when the closure is lifted into a named
+/// function, and the lifted function is pure. A capture that is *written* cannot be lifted into
+/// anything pure — the closure's whole job is the side effect, and no signature change fixes that.
+///
+/// Names bound by the closure itself — its parameters, and any `let`/`var` in its body — are fair
+/// game to assign to: they are locals, not state. So are the parameters of any closure nested inside
+/// it, `$0` included; see `BoundNameCollector`.
+final class CaptureMutationChecker: SourceAccurateSyntaxVisitor {
+
+    private let locallyBound: Set<String>
+
+    /// The first captured name written to, or `nil` when none is.
+    private(set) var mutatedName: String?
+
+    init(closure: ClosureExprSyntax, viewMode _: SyntaxTreeViewMode) {
+        self.locallyBound = Self.namesBound(by: closure)
+        super.init()
+    }
+
+    /// The folded form — present when the tree has been through an `OperatorTable`.
+    override func visit(_ node: InfixOperatorExprSyntax) -> SyntaxVisitorContinueKind {
+        guard isAssignment(node.operator) else { return .visitChildren }
+        refuteIfCaptured(node.leftOperand)
+        return .visitChildren
+    }
+
+    /// The *unfolded* form, which is what `Parser.parse` actually produces: an operator sequence is
+    /// a flat `SequenceExprSyntax` until an `OperatorTable` folds it, so a visitor that only knows
+    /// `InfixOperatorExprSyntax` sees no assignments at all.
+    override func visit(_ node: SequenceExprSyntax) -> SyntaxVisitorContinueKind {
+        let elements = Array(node.elements)
+        for (index, element) in elements.enumerated()
+        where index > 0 && isAssignment(element) {
+            refuteIfCaptured(elements[index - 1])
+        }
+        return .visitChildren
+    }
+
+    /// Records a mutation when `target` writes through something the closure captured rather than
+    /// declared.
+    private func refuteIfCaptured(_ target: ExprSyntax) {
+        guard let root = rootName(of: target) else { return }
+        guard !locallyBound.contains(root), !Self.isShorthandParameter(root) else { return }
+        if mutatedName == nil { mutatedName = root }
+    }
+
+    /// `$0`, `$1`, … — a shorthand parameter is by construction bound by *some* enclosing closure and
+    /// can never be a capture from outside every closure. Named parameters are already treated as
+    /// locals, so the shorthand spelling of the same thing has to agree.
+    ///
+    /// The digit check matters: `$` also prefixes a property wrapper's projected value, and
+    /// `$isPresented.wrappedValue = true` writes through a genuine capture. Only `$` followed by
+    /// digits is a closure parameter.
+    static func isShorthandParameter(_ name: String) -> Bool {
+        guard name.hasPrefix("$") else { return false }
+        let digits = name.dropFirst()
+        return !digits.isEmpty && digits.allSatisfy(\.isNumber)
+    }
+
+    /// `=`, and the compound forms (`+=`, `-=`, …) — all of which write to the left-hand side.
+    func isAssignment(_ operatorExpr: ExprSyntax) -> Bool {
+        if operatorExpr.is(AssignmentExprSyntax.self) { return true }
+        guard let binary = operatorExpr.as(BinaryOperatorExprSyntax.self) else { return false }
+        return binary.operator.text.hasSuffix("=")
+            && !["==", "!=", "<=", ">="].contains(binary.operator.text)
+    }
+
+    /// The base identifier an assignment target ultimately writes through: `a` in `a`, `a.b`,
+    /// `a[0].b`. `self.x = …` yields `self`, which is never locally bound, so it refutes.
+    private func rootName(of expr: ExprSyntax) -> String? {
+        if let reference = expr.as(DeclReferenceExprSyntax.self) {
+            return reference.baseName.text
+        }
+        if let member = expr.as(MemberAccessExprSyntax.self), let base = member.base {
+            return rootName(of: base)
+        }
+        if let subscriptExpr = expr.as(SubscriptCallExprSyntax.self) {
+            return rootName(of: subscriptExpr.calledExpression)
+        }
+        return nil
+    }
+
+    /// The closure's own parameters, plus every name it binds in its body.
+    private static func namesBound(by closure: ClosureExprSyntax) -> Set<String> {
+        var names: Set<String> = []
+
+        if let parameterClause = closure.signature?.parameterClause {
+            switch parameterClause {
+            case .simpleInput(let list):
+                for parameter in list { names.insert(parameter.name.text) }
+
+            case .parameterClause(let clause):
+                for parameter in clause.parameters {
+                    names.insert(parameter.secondName?.text ?? parameter.firstName.text)
+                }
+            }
+        }
+
+        let collector = BoundNameCollector()
+        collector.walk(closure.statements)
+        return names.union(collector.names)
+    }
+}
+
+/// Every name a body binds — `let`/`var`, `if let`, `for … in`, `case let`, and the parameters of
+/// any closure nested inside it.
+///
+/// Nested closures' parameters belong here for the same reason their `let`s and `var`s do: they are
+/// names the region binds for itself, not state reaching in from outside it. Collecting the pattern
+/// bindings while omitting the parameters gave one region two different definitions of "local", so
+/// `xs.reduce(into: 0) { acc, x in acc += x }` nested inside a closure read as a captured write when
+/// `acc` is as local as any `var`.
+///
+/// **The set is flat: scopes are not tracked.** A name bound by one nested closure counts as local
+/// everywhere in the outer body, so a genuine captured write to `total` goes unrecorded if some
+/// unrelated nested closure also binds a `total`. That approximation is not new — it was already
+/// true of nested `let`/`var` — and it errs toward calling a closure pure, which is the direction a
+/// caller can check cheaply.
+private final class BoundNameCollector: SourceAccurateSyntaxVisitor {
+    var names: Set<String> = []
+
+    override func visit(_ node: IdentifierPatternSyntax) -> SyntaxVisitorContinueKind {
+        names.insert(node.identifier.text)
+        return .visitChildren
+    }
+
+    /// `rows.forEach { row in … }` — the shorthand parameter list.
+    override func visit(_ node: ClosureShorthandParameterSyntax) -> SyntaxVisitorContinueKind {
+        names.insert(node.name.text)
+        return .visitChildren
+    }
+
+    /// `rows.forEach { (row: Row) in … }` — the full parameter clause. The *second* name is the one
+    /// the body refers to when both are written.
+    override func visit(_ node: ClosureParameterSyntax) -> SyntaxVisitorContinueKind {
+        names.insert(node.secondName?.text ?? node.firstName.text)
+        return .visitChildren
+    }
+}
+
 /// Infers whether a function is `Effect.pure` — referentially transparent:
 /// no side effects, deterministic, and total (a function of its inputs alone).
 ///
@@ -148,7 +428,7 @@ public struct PurityInferrer: Sendable {
         // `contentsOfFile` and `contentsOfDirectory` are distinctive: no pure API
         // uses either label. Bare `contentsOf` is NOT, and must never be added
         // here -- see `FileReadChecker`, which matches it on the callee instead.
-        "contentsOfFile", "contentsOfDirectory"
+        "contentsOfFile", "contentsOfDirectory",
         // File-system reads that never name a type in this list. Each is a
         // distinctive member or label rather than a type, which is what lets them
         // sit here without the over-refutation the `String`/`Data` note forbids.
@@ -192,7 +472,7 @@ public struct PurityInferrer: Sendable {
         "random", "randomElement", "shuffled",
         "Date", "UUID",
         // Compare against the current instant even when the calendar is handed in.
-        "isDateInToday", "isDateInYesterday", "isDateInTomorrow"
+        "isDateInToday", "isDateInYesterday", "isDateInTomorrow",
     ]).union(propertyMarkers)
 
     /// Nondeterminism markers that are **properties**, so a key path reads them
@@ -820,285 +1100,5 @@ public struct PurityInferrer: Sendable {
         let checker = TryExpressionChecker()
         checker.walk(body)
         return !checker.sawTry
-    }
-}
-
-/// Finds any nondeterminism source this module's shared classifier recognises.
-///
-/// The classifier is consulted rather than re-derived: `NondeterminismSources`
-/// is the type this package extracted so that "does this reach for ambient
-/// time" has one implementation, and a purity oracle carrying a fourth copy of
-/// the answer would be the drift that extraction exists to prevent.
-///
-/// Both overloads are needed. `source(of: FunctionCallExprSyntax)` catches
-/// `ContinuousClock()`, `mach_absolute_time()`, `DispatchTime.now()`;
-/// `source(of: MemberAccessExprSyntax)` catches the property forms —
-/// `SuspendingClock.now`, `Locale.current`, `TimeZone.current` — which are not
-/// calls at all and which a call-only walk misses entirely.
-private final class NondeterminismChecker: SourceAccurateSyntaxVisitor {
-
-    /// The **first** source seen, which is the one a diagnostic names. The walk is
-    /// not short-circuited — it never was — so keeping the first rather than the
-    /// last costs nothing and makes the witness independent of tree order below
-    /// the first hit.
-    private(set) var source: NondeterminismSource?
-
-    override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
-        if source == nil { source = NondeterminismSources.source(of: node) }
-        return .visitChildren
-    }
-
-    override func visit(_ node: MemberAccessExprSyntax) -> SyntaxVisitorContinueKind {
-        if source == nil { source = NondeterminismSources.source(of: node) }
-        return .visitChildren
-    }
-}
-
-/// Detects a file read spelled `SomeType(contentsOf:)`.
-///
-/// `contentsOf` cannot be matched as a bare token: it is the argument label of
-/// `append(contentsOf:)` and `insert(contentsOf:)`, so a token match refutes
-/// every pure function that appends one collection to another. Matching the
-/// *callee* separates them — `String(contentsOf: url)` names a file-reading
-/// type, `array.append(contentsOf: other)` does not.
-private final class FileReadChecker: SourceAccurateSyntaxVisitor {
-
-    /// Types whose `init(contentsOf:)` reads from a URL or path. `String` and
-    /// `Data` are deliberately absent from `sideEffectMarkers` because naming
-    /// them as bare tokens would refute nearly everything; naming them here is
-    /// safe, because the match also requires the `contentsOf` label.
-    private static let fileReadingTypes: Set<String> = [
-        "String", "Data", "NSString", "NSData", "NSDictionary", "NSArray"
-    ]
-
-    /// The first read seen, spelled as the diagnostic wants it —
-    /// `"String(contentsOf:)"`.
-    private(set) var fileRead: String?
-
-    override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
-        guard let callee = node.calledExpression.as(DeclReferenceExprSyntax.self),
-              Self.fileReadingTypes.contains(callee.baseName.text),
-              node.arguments.contains(where: { $0.label?.text == "contentsOf" })
-        else { return .visitChildren }
-        if fileRead == nil { fileRead = "\(callee.baseName.text)(contentsOf:)" }
-        return .visitChildren
-    }
-}
-
-/// Detects a base-less member — `.now`, `.init()`, `.standardError` — which takes its type from
-/// whatever the code around it declares.
-final class ImplicitMemberChecker: SourceAccurateSyntaxVisitor {
-
-    private(set) var found = false
-
-    override func visit(_ node: MemberAccessExprSyntax) -> SyntaxVisitorContinueKind {
-        if node.base == nil { found = true }
-        return found ? .skipChildren : .visitChildren
-    }
-}
-
-/// Detects any `try` — the mark of a throw propagated from a callee rather than
-/// raised by the function itself.
-private final class TryExpressionChecker: SourceAccurateSyntaxVisitor {
-
-    private(set) var sawTry = false
-
-    override func visit(_ node: TryExprSyntax) -> SyntaxVisitorContinueKind {
-        sawTry = true
-        return .skipChildren
-    }
-}
-
-/// Walks a function body looking for any runtime trap that breaks totality.
-private final class TotalityChecker: SourceAccurateSyntaxVisitor {
-
-    /// The first trap seen, or `nil` when the body is total. Which trap it is, not
-    /// merely that there is one: `x!` and `fatalError("unreachable")` call for
-    /// different advice, and the second names its own callee.
-    private(set) var trap: PurityRefutation.Partiality?
-
-    /// Standard-library trap functions: reaching them means the function has no
-    /// return value for some inputs.
-    private static let trapFunctions: Set<String> = [
-        "fatalError", "preconditionFailure", "precondition",
-        "assert", "assertionFailure"
-    ]
-
-    private func record(_ partiality: PurityRefutation.Partiality) {
-        if trap == nil { trap = partiality }
-    }
-
-    override func visit(_ node: ForceUnwrapExprSyntax) -> SyntaxVisitorContinueKind {
-        _ = node
-        record(.forceUnwrap)
-        return .skipChildren
-    }
-
-    override func visit(_ node: TryExprSyntax) -> SyntaxVisitorContinueKind {
-        if node.questionOrExclamationMark?.text == "!" { record(.forcedTry) }
-        return .visitChildren
-    }
-
-    override func visit(_ node: AsExprSyntax) -> SyntaxVisitorContinueKind {
-        if node.questionOrExclamationMark?.text == "!" { record(.forcedCast) }
-        return .visitChildren
-    }
-
-    // Raw (unfolded) parse trees represent `x as! T` as an `UnresolvedAsExprSyntax`
-    // inside a `SequenceExprSyntax`; the folded `AsExprSyntax` form only appears
-    // after operator-precedence folding, which the linter doesn't run.
-    override func visit(_ node: UnresolvedAsExprSyntax) -> SyntaxVisitorContinueKind {
-        if node.questionOrExclamationMark?.text == "!" { record(.forcedCast) }
-        return .visitChildren
-    }
-
-    override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
-        if let callee = node.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
-           Self.trapFunctions.contains(callee) {
-            record(.trap(callee))
-        }
-        return .visitChildren
-    }
-}
-
-/// Detects a closure assigning to something it captured rather than declared.
-///
-/// A capture that is only *read* becomes a parameter when the closure is lifted into a named
-/// function, and the lifted function is pure. A capture that is *written* cannot be lifted into
-/// anything pure — the closure's whole job is the side effect, and no signature change fixes that.
-///
-/// Names bound by the closure itself — its parameters, and any `let`/`var` in its body — are fair
-/// game to assign to: they are locals, not state. So are the parameters of any closure nested inside
-/// it, `$0` included; see `BoundNameCollector`.
-final class CaptureMutationChecker: SourceAccurateSyntaxVisitor {
-
-    private let locallyBound: Set<String>
-
-    /// The first captured name written to, or `nil` when none is.
-    private(set) var mutatedName: String?
-
-    init(closure: ClosureExprSyntax, viewMode: SyntaxTreeViewMode) {
-        self.locallyBound = Self.namesBound(by: closure)
-        super.init()
-    }
-
-    /// The folded form — present when the tree has been through an `OperatorTable`.
-    override func visit(_ node: InfixOperatorExprSyntax) -> SyntaxVisitorContinueKind {
-        guard isAssignment(node.operator) else { return .visitChildren }
-        refuteIfCaptured(node.leftOperand)
-        return .visitChildren
-    }
-
-    /// The *unfolded* form, which is what `Parser.parse` actually produces: an operator sequence is
-    /// a flat `SequenceExprSyntax` until an `OperatorTable` folds it, so a visitor that only knows
-    /// `InfixOperatorExprSyntax` sees no assignments at all.
-    override func visit(_ node: SequenceExprSyntax) -> SyntaxVisitorContinueKind {
-        let elements = Array(node.elements)
-        for (index, element) in elements.enumerated()
-        where index > 0 && isAssignment(element) {
-            refuteIfCaptured(elements[index - 1])
-        }
-        return .visitChildren
-    }
-
-    /// Records a mutation when `target` writes through something the closure captured rather than
-    /// declared.
-    private func refuteIfCaptured(_ target: ExprSyntax) {
-        guard let root = rootName(of: target) else { return }
-        guard !locallyBound.contains(root), !Self.isShorthandParameter(root) else { return }
-        if mutatedName == nil { mutatedName = root }
-    }
-
-    /// `$0`, `$1`, … — a shorthand parameter is by construction bound by *some* enclosing closure and
-    /// can never be a capture from outside every closure. Named parameters are already treated as
-    /// locals, so the shorthand spelling of the same thing has to agree.
-    ///
-    /// The digit check matters: `$` also prefixes a property wrapper's projected value, and
-    /// `$isPresented.wrappedValue = true` writes through a genuine capture. Only `$` followed by
-    /// digits is a closure parameter.
-    static func isShorthandParameter(_ name: String) -> Bool {
-        guard name.hasPrefix("$") else { return false }
-        let digits = name.dropFirst()
-        return !digits.isEmpty && digits.allSatisfy(\.isNumber)
-    }
-
-    /// `=`, and the compound forms (`+=`, `-=`, …) — all of which write to the left-hand side.
-    func isAssignment(_ operatorExpr: ExprSyntax) -> Bool {
-        if operatorExpr.is(AssignmentExprSyntax.self) { return true }
-        guard let binary = operatorExpr.as(BinaryOperatorExprSyntax.self) else { return false }
-        return binary.operator.text.hasSuffix("=")
-            && !["==", "!=", "<=", ">="].contains(binary.operator.text)
-    }
-
-    /// The base identifier an assignment target ultimately writes through: `a` in `a`, `a.b`,
-    /// `a[0].b`. `self.x = …` yields `self`, which is never locally bound, so it refutes.
-    private func rootName(of expr: ExprSyntax) -> String? {
-        if let reference = expr.as(DeclReferenceExprSyntax.self) {
-            return reference.baseName.text
-        }
-        if let member = expr.as(MemberAccessExprSyntax.self), let base = member.base {
-            return rootName(of: base)
-        }
-        if let subscriptExpr = expr.as(SubscriptCallExprSyntax.self) {
-            return rootName(of: subscriptExpr.calledExpression)
-        }
-        return nil
-    }
-
-    /// The closure's own parameters, plus every name it binds in its body.
-    private static func namesBound(by closure: ClosureExprSyntax) -> Set<String> {
-        var names: Set<String> = []
-
-        if let parameterClause = closure.signature?.parameterClause {
-            switch parameterClause {
-            case .simpleInput(let list):
-                for parameter in list { names.insert(parameter.name.text) }
-
-            case .parameterClause(let clause):
-                for parameter in clause.parameters {
-                    names.insert(parameter.secondName?.text ?? parameter.firstName.text)
-                }
-            }
-        }
-
-        let collector = BoundNameCollector()
-        collector.walk(closure.statements)
-        return names.union(collector.names)
-    }
-}
-
-/// Every name a body binds — `let`/`var`, `if let`, `for … in`, `case let`, and the parameters of
-/// any closure nested inside it.
-///
-/// Nested closures' parameters belong here for the same reason their `let`s and `var`s do: they are
-/// names the region binds for itself, not state reaching in from outside it. Collecting the pattern
-/// bindings while omitting the parameters gave one region two different definitions of "local", so
-/// `xs.reduce(into: 0) { acc, x in acc += x }` nested inside a closure read as a captured write when
-/// `acc` is as local as any `var`.
-///
-/// **The set is flat: scopes are not tracked.** A name bound by one nested closure counts as local
-/// everywhere in the outer body, so a genuine captured write to `total` goes unrecorded if some
-/// unrelated nested closure also binds a `total`. That approximation is not new — it was already
-/// true of nested `let`/`var` — and it errs toward calling a closure pure, which is the direction a
-/// caller can check cheaply.
-private final class BoundNameCollector: SourceAccurateSyntaxVisitor {
-    var names: Set<String> = []
-
-    override func visit(_ node: IdentifierPatternSyntax) -> SyntaxVisitorContinueKind {
-        names.insert(node.identifier.text)
-        return .visitChildren
-    }
-
-    /// `rows.forEach { row in … }` — the shorthand parameter list.
-    override func visit(_ node: ClosureShorthandParameterSyntax) -> SyntaxVisitorContinueKind {
-        names.insert(node.name.text)
-        return .visitChildren
-    }
-
-    /// `rows.forEach { (row: Row) in … }` — the full parameter clause. The *second* name is the one
-    /// the body refers to when both are written.
-    override func visit(_ node: ClosureParameterSyntax) -> SyntaxVisitorContinueKind {
-        names.insert(node.secondName?.text ?? node.firstName.text)
-        return .visitChildren
     }
 }

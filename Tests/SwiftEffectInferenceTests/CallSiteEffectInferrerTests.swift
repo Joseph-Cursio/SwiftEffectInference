@@ -1,7 +1,7 @@
+@testable import SwiftEffectInference
 import SwiftParser
 import SwiftSyntax
 import Testing
-@testable import SwiftEffectInference
 
 /// Characterization suite for `CallSiteEffectInferrer`.
 ///
@@ -20,6 +20,7 @@ struct CallSiteEffectInferrerTests {
         let tree = Parser.parse(source: source)
         final class Finder: SyntaxVisitor {
             var found: FunctionCallExprSyntax?
+
             override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
                 if found == nil { found = node }
                 return .visitChildren
@@ -43,50 +44,78 @@ struct CallSiteEffectInferrerTests {
     }
 
     static let cases: [Case] = [
-        Case(label: "logger receiver", source: "logger.info(\"x\")",
-             imports: [], expectedEffect: .observational,
-             reasonContains: "logger-shaped"),
-        Case(label: "metric receiver", source: "counter.increment()",
-             imports: ["Metrics"], expectedEffect: .observational,
-             reasonContains: "metric-primitive"),
-        Case(label: "type constructor", source: "JSONDecoder()",
-             imports: ["Foundation"], expectedEffect: .idempotent,
-             reasonContains: "known-idempotent"),
-        Case(label: "codec receiver", source: "decoder.decode(Foo.self)",
-             imports: ["Foundation"], expectedEffect: .idempotent,
-             reasonContains: "codec-pattern"),
-        Case(label: "idempotent receiver pair", source: "request.decode(Foo.self)",
-             imports: ["Hummingbird"], expectedEffect: .idempotent,
-             reasonContains: "Hummingbird primitive"),
-        Case(label: "cross-framework pair", source: "parameters.get(\"id\")",
-             imports: ["Vapor"], expectedEffect: .idempotent,
-             reasonContains: "primitive"),
-        Case(label: "bare-name override", source: "send(.action)",
-             imports: ["ComposableArchitecture"], expectedEffect: .idempotent,
-             reasonContains: "closure-parameter primitive"),
-        Case(label: "whitelist idempotent", source: "upsert()",
-             imports: [], expectedEffect: .idempotent,
-             reasonContains: "callee name"),
-        Case(label: "whitelist non-idempotent", source: "create()",
-             imports: [], expectedEffect: .nonIdempotent,
-             reasonContains: "callee name"),
-        Case(label: "framework idempotent method", source: "query(on: db)",
-             imports: ["FluentKit"], expectedEffect: .idempotent,
-             reasonContains: "query-builder read"),
-        Case(label: "framework non-idempotent method", source: "model.save()",
-             imports: ["FluentKit"], expectedEffect: .nonIdempotent,
-             reasonContains: "ORM verb"),
-        Case(label: "non-idempotent prefix", source: "sendEmail()",
-             imports: [], expectedEffect: .nonIdempotent,
-             reasonContains: "callee-name prefix"),
-        Case(label: "no match", source: "doThing()",
-             imports: [], expectedEffect: nil,
-             reasonContains: nil),
+        Case(
+            label: "logger receiver", source: "logger.info(\"x\")",
+            imports: [], expectedEffect: .observational,
+            reasonContains: "logger-shaped"
+        ),
+        Case(
+            label: "metric receiver", source: "counter.increment()",
+            imports: ["Metrics"], expectedEffect: .observational,
+            reasonContains: "metric-primitive"
+        ),
+        Case(
+            label: "type constructor", source: "JSONDecoder()",
+            imports: ["Foundation"], expectedEffect: .idempotent,
+            reasonContains: "known-idempotent"
+        ),
+        Case(
+            label: "codec receiver", source: "decoder.decode(Foo.self)",
+            imports: ["Foundation"], expectedEffect: .idempotent,
+            reasonContains: "codec-pattern"
+        ),
+        Case(
+            label: "idempotent receiver pair", source: "request.decode(Foo.self)",
+            imports: ["Hummingbird"], expectedEffect: .idempotent,
+            reasonContains: "Hummingbird primitive"
+        ),
+        Case(
+            label: "cross-framework pair", source: "parameters.get(\"id\")",
+            imports: ["Vapor"], expectedEffect: .idempotent,
+            reasonContains: "primitive"
+        ),
+        Case(
+            label: "bare-name override", source: "send(.action)",
+            imports: ["ComposableArchitecture"], expectedEffect: .idempotent,
+            reasonContains: "closure-parameter primitive"
+        ),
+        Case(
+            label: "whitelist idempotent", source: "upsert()",
+            imports: [], expectedEffect: .idempotent,
+            reasonContains: "callee name"
+        ),
+        Case(
+            label: "whitelist non-idempotent", source: "create()",
+            imports: [], expectedEffect: .nonIdempotent,
+            reasonContains: "callee name"
+        ),
+        Case(
+            label: "framework idempotent method", source: "query(on: db)",
+            imports: ["FluentKit"], expectedEffect: .idempotent,
+            reasonContains: "query-builder read"
+        ),
+        Case(
+            label: "framework non-idempotent method", source: "model.save()",
+            imports: ["FluentKit"], expectedEffect: .nonIdempotent,
+            reasonContains: "ORM verb"
+        ),
+        Case(
+            label: "non-idempotent prefix", source: "sendEmail()",
+            imports: [], expectedEffect: .nonIdempotent,
+            reasonContains: "callee-name prefix"
+        ),
+        Case(
+            label: "no match", source: "doThing()",
+            imports: [], expectedEffect: nil,
+            reasonContains: nil
+        ),
         // Gate inactive: metric receiver without the `Metrics` import does
         // not classify, so both methods must agree on nil.
-        Case(label: "metric gate inactive", source: "counter.increment()",
-             imports: [], expectedEffect: nil,
-             reasonContains: nil)
+        Case(
+            label: "metric gate inactive", source: "counter.increment()",
+            imports: [], expectedEffect: nil,
+            reasonContains: nil
+        ),
     ]
 
     @Test("effect matches expectation", arguments: cases)

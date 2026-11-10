@@ -96,6 +96,85 @@ struct ConstructionInitializer: Sendable, Equatable {
     }
 }
 
+/// The arguments a construction call writes, split the way Swift binds them.
+struct CallShape: Hashable {
+    /// The labels of the parenthesized arguments, `_` for an unlabelled one.
+    let ordinary: [String]
+    /// The trailing closures: `_` for the first, then the labels of any more.
+    let trailing: [String]
+
+    static let empty = Self(ordinary: [], trailing: [])
+
+    init(ordinary: [String], trailing: [String]) {
+        self.ordinary = ordinary
+        self.trailing = trailing
+    }
+
+    /// Built from the arguments alone, so the callee's spelling — `T<G>(…)`, `Outer.T(…)` — never
+    /// costs the shape.
+    init(_ call: FunctionCallExprSyntax) {
+        ordinary = call.arguments.map { $0.label?.text ?? "_" }
+        var closureLabels: [String] = []
+        if call.trailingClosure != nil {
+            closureLabels.append("_")
+            closureLabels += call.additionalTrailingClosures.map(\.label.text)
+        }
+        trailing = closureLabels
+    }
+
+    /// Every label written, for deciding which defaults the call omitted.
+    var labels: [String] { ordinary + trailing }
+
+    /// Whether this call could have reached an initializer with `parameters`.
+    ///
+    /// The parenthesized arguments match in order, skipping only omittable parameters. The first
+    /// trailing closure is matched by forward scan (SE-0286): it may bind to any later parameter
+    /// with only omittable ones before it, and any further, labelled ones follow in order. This is
+    /// looser than the compiler — it does not know which parameters take a function — and looser
+    /// is the safe direction: a call accepted by more initializers refutes if any of them does.
+    func reaches(_ parameters: [DeclarationShape.Parameter]) -> Bool {
+        guard let afterOrdinary = Self.scan(parameters, from: 0, labels: ordinary) else { return false }
+        guard !trailing.isEmpty else {
+            return parameters[afterOrdinary...].allSatisfy(\.isOmittable)
+        }
+        var first = afterOrdinary
+        while first < parameters.count {
+            if let end = Self.scan(parameters, from: first + 1, labels: Array(trailing.dropFirst())),
+               parameters[end...].allSatisfy(\.isOmittable) {
+                return true
+            }
+            guard parameters[first].isOmittable else { break }
+            first += 1
+        }
+        return false
+    }
+
+    /// Matches `labels` against `parameters` from `start`; the index after the last one matched,
+    /// or `nil`.
+    private static func scan(
+        _ parameters: [DeclarationShape.Parameter],
+        from start: Int,
+        labels: [String]
+    ) -> Int? {
+        var declared = start
+        var written = 0
+        while written < labels.count {
+            while declared < parameters.count,
+                  parameters[declared].label != labels[written],
+                  parameters[declared].isOmittable {
+                declared += 1
+            }
+            guard declared < parameters.count, parameters[declared].label == labels[written] else { return nil }
+            written += 1
+            if parameters[declared].isVariadic {
+                while written < labels.count, labels[written] == "_" { written += 1 }
+            }
+            declared += 1
+        }
+        return declared
+    }
+}
+
 /// One declared type and the facts about constructing it.
 struct ConstructionDeclaration: Sendable, Equatable {
     let qualifiedName: String
@@ -156,9 +235,9 @@ struct ConstructionDeclaration: Sendable, Equatable {
 
     /// How many of them have one.
     var refutedSlotCount: Int {
-        [unconditional, conditionalStoredDefault].compactMap { $0 }.count
+        [unconditional, conditionalStoredDefault].compactMap(\.self).count
             + initializers.reduce(0) {
-                $0 + [$1.bodyRefutation, $1.storedDefaultRefutation].compactMap { $0 }.count
+                $0 + [$1.bodyRefutation, $1.storedDefaultRefutation].compactMap(\.self).count
                     + $1.omittedDefaultRefutations.count
             }
     }
@@ -166,7 +245,7 @@ struct ConstructionDeclaration: Sendable, Equatable {
     /// `self`, keeping every witness `earlier` already found — so a witness, once assigned, never
     /// changes, and a recursive construction converges instead of nesting one level deeper on
     /// every pass.
-    func keeping(_ earlier: ConstructionDeclaration) -> ConstructionDeclaration {
+    func keeping(_ earlier: Self) -> Self {
         var merged = self
         merged.unconditional = earlier.unconditional ?? unconditional
         merged.conditionalStoredDefault = earlier.conditionalStoredDefault ?? conditionalStoredDefault
@@ -175,93 +254,11 @@ struct ConstructionDeclaration: Sendable, Equatable {
             merged.initializers[index].bodyRefutation = old.bodyRefutation ?? merged.initializers[index].bodyRefutation
             merged.initializers[index].storedDefaultRefutation =
                 old.storedDefaultRefutation ?? merged.initializers[index].storedDefaultRefutation
-            let kept = Dictionary(
-                old.omittedDefaultRefutations.map { ($0.label, $0) },
-                uniquingKeysWith: { first, _ in first }
-            )
+            let kept = Dictionary(old.omittedDefaultRefutations.map { ($0.label, $0) }) { first, _ in first }
             merged.initializers[index].omittedDefaultRefutations =
                 merged.initializers[index].omittedDefaultRefutations.map { kept[$0.label] ?? $0 }
         }
         return merged
-    }
-}
-
-/// The arguments a construction call writes, split the way Swift binds them.
-struct CallShape: Hashable {
-    /// The labels of the parenthesized arguments, `_` for an unlabelled one.
-    let ordinary: [String]
-    /// The trailing closures: `_` for the first, then the labels of any more.
-    let trailing: [String]
-
-    static let empty = CallShape(ordinary: [], trailing: [])
-
-    init(ordinary: [String], trailing: [String]) {
-        self.ordinary = ordinary
-        self.trailing = trailing
-    }
-
-    /// Built from the arguments alone, so the callee's spelling — `T<G>(…)`, `Outer.T(…)` — never
-    /// costs the shape.
-    init(_ call: FunctionCallExprSyntax) {
-        ordinary = call.arguments.map { $0.label?.text ?? "_" }
-        var trailing: [String] = []
-        if call.trailingClosure != nil {
-            trailing.append("_")
-            trailing += call.additionalTrailingClosures.map(\.label.text)
-        }
-        self.trailing = trailing
-    }
-
-    /// Every label written, for deciding which defaults the call omitted.
-    var labels: [String] { ordinary + trailing }
-
-    /// Whether this call could have reached an initializer with `parameters`.
-    ///
-    /// The parenthesized arguments match in order, skipping only omittable parameters. The first
-    /// trailing closure is matched by forward scan (SE-0286): it may bind to any later parameter
-    /// with only omittable ones before it, and any further, labelled ones follow in order. This is
-    /// looser than the compiler — it does not know which parameters take a function — and looser
-    /// is the safe direction: a call accepted by more initializers refutes if any of them does.
-    func reaches(_ parameters: [DeclarationShape.Parameter]) -> Bool {
-        guard let afterOrdinary = Self.scan(parameters, from: 0, labels: ordinary) else { return false }
-        guard !trailing.isEmpty else {
-            return parameters[afterOrdinary...].allSatisfy(\.isOmittable)
-        }
-        var first = afterOrdinary
-        while first < parameters.count {
-            if let end = Self.scan(parameters, from: first + 1, labels: Array(trailing.dropFirst())),
-               parameters[end...].allSatisfy(\.isOmittable) {
-                return true
-            }
-            guard parameters[first].isOmittable else { break }
-            first += 1
-        }
-        return false
-    }
-
-    /// Matches `labels` against `parameters` from `start`; the index after the last one matched,
-    /// or `nil`.
-    private static func scan(
-        _ parameters: [DeclarationShape.Parameter],
-        from start: Int,
-        labels: [String]
-    ) -> Int? {
-        var declared = start
-        var written = 0
-        while written < labels.count {
-            while declared < parameters.count,
-                  parameters[declared].label != labels[written],
-                  parameters[declared].isOmittable {
-                declared += 1
-            }
-            guard declared < parameters.count, parameters[declared].label == labels[written] else { return nil }
-            written += 1
-            if parameters[declared].isVariadic {
-                while written < labels.count, labels[written] == "_" { written += 1 }
-            }
-            declared += 1
-        }
-        return declared
     }
 }
 

@@ -1,7 +1,7 @@
+@testable import SwiftEffectInference
 import SwiftParser
 import SwiftSyntax
 import Testing
-@testable import SwiftEffectInference
 
 /// Clock and ambient reads that spell no marker. `main` caught each of these only when `Date` was
 /// written somewhere else in the same body, so the token stood in for them. The cases here spell
@@ -39,7 +39,7 @@ struct UnspelledClockPurityTests {
         "func f(_ s: Scheduler) -> Int { s.schedule(at: .now) }",
         "func f(_ base: Date) -> Bool { base < .now.addingTimeInterval(60) }",
         // A default spells it base-less too, and runs on every call that omits it.
-        "func stamp(_ id: Int, now: Date = .now) -> String { \"\\(id)@\\(now)\" }"
+        "func stamp(_ id: Int, now: Date = .now) -> String { \"\\(id)@\\(now)\" }",
     ])
     func baseLessNow(source: String) throws {
         #expect(try verdict(source) == .refuted, "\(source)")
@@ -57,7 +57,7 @@ struct UnspelledClockPurityTests {
         "func f(asOf now: Date) -> Date { now.addingTimeInterval(60) }",
         "func f(_ clock: Clock) -> Int { clock.now }",
         "func f(now: Int) -> Int { let later = now + 1; return later }",
-        "func f(_ timing: Timing) -> Bool { timing == .later }"
+        "func f(_ timing: Timing) -> Bool { timing == .later }",
     ])
     func nowThatIsNotBaseLess(source: String) throws {
         #expect(try verdict(source) == .pure, "\(source)")
@@ -73,7 +73,7 @@ struct UnspelledClockPurityTests {
         "func late(_ d: Date, calendar: Calendar) -> Bool { calendar.isDateInYesterday(d) }",
         "func soon(_ d: Date, calendar: Calendar) -> Bool { calendar.isDateInTomorrow(d) }",
         "func since(_ d: Date) -> Double { DateInterval().start.timeIntervalSince(d) }",
-        "func since(_ d: Date) -> Double { DateInterval.init().start.timeIntervalSince(d) }"
+        "func since(_ d: Date) -> Double { DateInterval.init().start.timeIntervalSince(d) }",
     ])
     func relativeToNow(source: String) throws {
         #expect(try verdict(source) == .refuted, "\(source)")
@@ -92,7 +92,7 @@ struct UnspelledClockPurityTests {
     @Test("a reader that is not relative to now", arguments: [
         "func weekend(_ d: Date, calendar: Calendar) -> Bool { calendar.isDateInWeekend(d) }",
         "func span(_ a: Date, _ b: Date) -> DateInterval { DateInterval(start: a, end: b) }",
-        "func span(_ a: Date) -> DateInterval { DateInterval(start: a, duration: 60) }"
+        "func span(_ a: Date) -> DateInterval { DateInterval(start: a, duration: 60) }",
     ])
     func notRelativeToNow(source: String) throws {
         #expect(try verdict(source) == .pure, "\(source)")
@@ -108,7 +108,7 @@ struct UnspelledClockPurityTests {
         "func summer(_ zone: TimeZone) -> Bool { zone.isDaylightSavingTime() }",
         "func shift(_ zone: TimeZone) -> Double { zone.daylightSavingTimeOffset() }",
         "func next(_ zone: TimeZone) -> Date? { zone.nextDaylightSavingTimeTransition }",
-        "func next(_ zones: [TimeZone]) -> [Date?] { zones.map(\\.nextDaylightSavingTimeTransition) }"
+        "func next(_ zones: [TimeZone]) -> [Date?] { zones.map(\\.nextDaylightSavingTimeTransition) }",
     ])
     func timeZoneReadsNow(source: String) throws {
         #expect(try verdict(source) == .refuted, "\(source)")
@@ -124,7 +124,7 @@ struct UnspelledClockPurityTests {
         "func offset(_ zone: TimeZone, at d: Date) -> Int { zone.secondsFromGMT(for: d) }",
         "func summer(_ zone: TimeZone, at d: Date) -> Bool { zone.isDaylightSavingTime(for: d) }",
         "func shift(_ zone: TimeZone, at d: Date) -> Double { zone.daylightSavingTimeOffset(for: d) }",
-        "func next(_ zone: TimeZone, after d: Date) -> Date? { zone.nextDaylightSavingTimeTransition(after: d) }"
+        "func next(_ zone: TimeZone, after d: Date) -> Date? { zone.nextDaylightSavingTimeTransition(after: d) }",
     ])
     func timeZoneReadsAnInstant(source: String) throws {
         #expect(try verdict(source) == .pure, "\(source)")
@@ -137,7 +137,7 @@ struct UnspelledClockPurityTests {
     @Test("NSDate and NSUUID read the clock and mint an identity", arguments: [
         "func since(_ d: Date) -> Double { NSDate().timeIntervalSince(d) }",
         "func since(_ d: Date) -> Double { NSDate.now.timeIntervalSince(d) }",
-        "func tag(_ n: Int) -> String { NSUUID().uuidString + String(n) }"
+        "func tag(_ n: Int) -> String { NSUUID().uuidString + String(n) }",
     ])
     func bridgedTwins(source: String) throws {
         #expect(try verdict(source) == .refuted, "\(source)")
@@ -154,7 +154,7 @@ struct UnspelledClockPurityTests {
         "func stamp(_ s: Double) -> Double { NSDate(timeIntervalSince1970: s).timeIntervalSince1970 }",
         "func id(_ s: String) -> String? { NSUUID(uuidString: s)?.uuidString }",
         "func isDate(_ x: Any) -> Bool { x is NSDate }",
-        "func kind() -> AnyClass { NSUUID.self }"
+        "func kind() -> AnyClass { NSUUID.self }",
     ])
     func bridgedTwinsWithTheirValue(source: String) throws {
         #expect(try verdict(source) == .pure, "\(source)")
@@ -168,7 +168,7 @@ struct UnspelledClockPurityTests {
         "func overdue(_ task: Task) -> Bool { task.due.timeIntervalSinceNow < 0 }",
         "func ages(_ ds: [Date]) -> [Double] { ds.map(\\.timeIntervalSinceNow) }",
         "func ages(_ ts: [Task]) -> [Double] { ts.map(\\Task.due.timeIntervalSinceNow) }",
-        "func ages(_ ds: [Date]) -> [Double] { ds.map { $0.timeIntervalSinceNow } }"
+        "func ages(_ ds: [Date]) -> [Double] { ds.map { $0.timeIntervalSinceNow } }",
     ])
     func timeIntervalSinceNow(source: String) throws {
         #expect(try verdict(source) == .refuted, "\(source)")
@@ -185,7 +185,7 @@ struct UnspelledClockPurityTests {
     /// path's component. The others name types, functions and labels, which no key path can name.
     @Test("a key path's other components are still not markers", arguments: [
         "func f(_ rows: [Row]) -> [Int] { rows.map(\\.random) }",
-        "func f(_ ds: [Date]) -> [Double] { ds.map(\\.timeIntervalSince1970) }"
+        "func f(_ ds: [Date]) -> [Double] { ds.map(\\.timeIntervalSince1970) }",
     ])
     func otherKeyPathComponents(source: String) throws {
         #expect(try verdict(source) == .pure, "\(source)")

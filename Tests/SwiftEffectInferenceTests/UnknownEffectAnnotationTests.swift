@@ -1,7 +1,7 @@
+@testable import SwiftEffectInference
 import SwiftParser
 import SwiftSyntax
 import Testing
-@testable import SwiftEffectInference
 
 /// `@EffectUnknown` — the author saying *"I cannot determine the effect here"*.
 ///
@@ -20,6 +20,7 @@ struct UnknownEffectAnnotationTests {
     private func firstFunction(in source: String) throws -> FunctionDeclSyntax {
         final class Finder: SyntaxVisitor {
             var found: FunctionDeclSyntax?
+
             override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
                 if found == nil { found = node }
                 return .skipChildren
@@ -102,6 +103,7 @@ struct UnknownEffectAnnotationTests {
     func variableBindingFormIsRead() throws {
         final class Finder: SyntaxVisitor {
             var found: VariableDeclSyntax?
+
             override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
                 if found == nil { found = node }
                 return .skipChildren

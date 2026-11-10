@@ -1,5 +1,24 @@
 import SwiftSyntax
 
+/// What a lookup finds — declarations, or the scopes and superclasses it reads — each once, in
+/// the order first found.
+///
+/// Once is all any reader needs: each takes the first candidate that answers, or skips one already
+/// visited. And it bounds an answer by what there is to find. Kept with repeats, an answer through
+/// `Self` held each namesake's members once per namesake, and each typealias over it multiplied
+/// that again: in the compiler's tests, a lookup of `B` among 6,300 declarations found 9,800, and
+/// two thousand files did not build in 8 GB.
+struct FirstFound<Element: Hashable> {
+    private(set) var list: [Element] = []
+    private var held: Set<Element> = []
+
+    var isEmpty: Bool { list.isEmpty }
+
+    mutating func merge(_ more: [Element]) {
+        for element in more where held.insert(element).inserted { list.append(element) }
+    }
+}
+
 // MARK: - Which declarations a spelling can mean
 
 extension ConstructionFacts {
@@ -352,25 +371,6 @@ extension ConstructionFacts {
             for (_, candidates) in superclasses(of: declarations[owner]) { found.merge(candidates) }
         }
         return found.list
-    }
-}
-
-/// What a lookup finds — declarations, or the scopes and superclasses it reads — each once, in
-/// the order first found.
-///
-/// Once is all any reader needs: each takes the first candidate that answers, or skips one already
-/// visited. And it bounds an answer by what there is to find. Kept with repeats, an answer through
-/// `Self` held each namesake's members once per namesake, and each typealias over it multiplied
-/// that again: in the compiler's tests, a lookup of `B` among 6,300 declarations found 9,800, and
-/// two thousand files did not build in 8 GB.
-struct FirstFound<Element: Hashable> {
-    private(set) var list: [Element] = []
-    private var held: Set<Element> = []
-
-    var isEmpty: Bool { list.isEmpty }
-
-    mutating func merge(_ more: [Element]) {
-        for element in more where held.insert(element).inserted { list.append(element) }
     }
 }
 

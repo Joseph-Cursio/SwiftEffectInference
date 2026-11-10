@@ -1,7 +1,7 @@
+@testable import SwiftEffectInference
 import SwiftParser
 import SwiftSyntax
 import Testing
-@testable import SwiftEffectInference
 
 /// Behavioural suite for `EffectSymbolTable` — cross-file declared-effect
 /// storage, the collision-withdrawal policy, and the body-inference
@@ -109,10 +109,7 @@ struct EffectSymbolTableTests {
         func save() {}
         """)
         var table = EffectSymbolTable.build(from: source)
-        table.applyBodyInference(
-            to: [source],
-            heuristicEffectForCall: { _, _ in nil }
-        )
+        table.applyBodyInference(to: [source]) { _, _ in nil }
 
         #expect(table.upwardInferredEffect(for: sig("wrapper")) == .nonIdempotent)
         #expect(table.upwardInference(for: sig("wrapper"))?.depth == 1)
@@ -131,10 +128,7 @@ struct EffectSymbolTableTests {
         func save() {}
         """)
         var table = EffectSymbolTable.build(from: source)
-        table.applyBodyInference(
-            to: [source],
-            heuristicEffectForCall: { _, _ in nil }
-        )
+        table.applyBodyInference(to: [source]) { _, _ in nil }
 
         // `save` keeps its declared provenance; no upward entry shadows it.
         #expect(table.lookupWithProvenance(for: sig("save"))?.1 == .declared)
@@ -149,12 +143,9 @@ struct EffectSymbolTableTests {
         }
         """)
         var table = EffectSymbolTable.build(from: source)
-        table.applyBodyInference(
-            to: [source],
-            heuristicEffectForCall: { call, _ in
-                call.calledExpression.referenceBaseName == "mysteryCall" ? .idempotent : nil
-            }
-        )
+        table.applyBodyInference(to: [source]) { call, _ in
+            call.calledExpression.referenceBaseName == "mysteryCall" ? .idempotent : nil
+        }
 
         #expect(table.upwardInferredEffect(for: sig("usesHeuristic")) == .idempotent)
         #expect(table.upwardInference(for: sig("usesHeuristic"))?.depth == 1)
@@ -175,10 +166,7 @@ struct EffectSymbolTableTests {
         func save() {}
         """)
         var table = EffectSymbolTable.build(from: source)
-        table.applyBodyInference(
-            to: [source],
-            heuristicEffectForCall: { _, _ in nil }
-        )
+        table.applyBodyInference(to: [source]) { _, _ in nil }
 
         // `middle` reaches the declared anchor in one hop …
         #expect(table.upwardInferredEffect(for: sig("middle")) == .nonIdempotent)
@@ -199,11 +187,7 @@ struct EffectSymbolTableTests {
         func save() {}
         """)
         var table = EffectSymbolTable.build(from: source)
-        table.applyBodyInference(
-            to: [source],
-            multiHop: true,
-            heuristicEffectForCall: { _, _ in nil }
-        )
+        table.applyBodyInference(to: [source], multiHop: true) { _, _ in nil }
 
         #expect(table.upwardInferredEffect(for: sig("middle")) == .nonIdempotent)
         #expect(table.upwardInferredEffect(for: sig("top")) == .nonIdempotent)
@@ -224,12 +208,7 @@ struct EffectSymbolTableTests {
         func save() {}
         """)
         var table = EffectSymbolTable.build(from: source)
-        table.applyBodyInference(
-            to: [source],
-            multiHop: true,
-            maxHops: 1,
-            heuristicEffectForCall: { _, _ in nil }
-        )
+        table.applyBodyInference(to: [source], multiHop: true, maxHops: 1) { _, _ in nil }
 
         // `top`'s natural depth is 2, capped to `maxHops`.
         #expect(table.upwardInferredEffect(for: sig("top")) == .nonIdempotent)
@@ -248,10 +227,7 @@ struct EffectSymbolTableTests {
         }
         """)
         var table = EffectSymbolTable.build(from: source)
-        table.applyBodyInference(
-            to: [source],
-            heuristicEffectForCall: { _, _ in nil }
-        )
+        table.applyBodyInference(to: [source]) { _, _ in nil }
 
         // The conflicting `amb` declarations withdraw the entry …
         #expect(table.effect(for: sig("amb", ["_"])) == nil)

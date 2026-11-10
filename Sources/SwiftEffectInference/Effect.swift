@@ -100,15 +100,15 @@ public enum Effect: Hashable, Sendable {
     /// `[a, b].reduce(initial) { $0.lub($1) }` therefore yields a result
     /// consistent with SwiftProjectLint's collection-form lub (first in
     /// iteration order wins for same-rank duplicates).
-    public func lub(_ other: Effect) -> Effect {
-        return rank >= other.rank ? self : other
+    public func lub(_ other: Self) -> Self {
+        rank >= other.rank ? self : other
     }
 
     /// Collection-form least-upper-bound. Returns the most-permissive effect
     /// in `effects`, or `nil` for an empty input. Same tie semantics as the
     /// pairwise `lub(_:)` — first occurrence of the highest-rank effect wins
     /// (matters for `externallyIdempotent` with different `keyParameter`s).
-    public static func lub(of effects: [Effect]) -> Effect? {
+    public static func lub(of effects: [Self]) -> Self? {
         guard let first = effects.first else { return nil }
         return effects.dropFirst().reduce(first) { $0.lub($1) }
     }

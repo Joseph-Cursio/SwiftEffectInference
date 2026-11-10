@@ -248,6 +248,7 @@ struct RawDeclaration {
     private static func namedTypes(in type: TypeSyntax) -> [TypeSyntax] {
         final class Finder: SyntaxVisitor {
             var found: [TypeSyntax] = []
+
             override func visit(_ node: IdentifierTypeSyntax) -> SyntaxVisitorContinueKind {
                 found.append(TypeSyntax(node))
                 return .visitChildren
@@ -268,7 +269,8 @@ struct RawDeclaration {
     private static func implicitMembers(in value: ExprSyntax) -> [String] {
         final class Finder: SyntaxVisitor {
             var found: [String] = []
-            override func visit(_ node: ClosureExprSyntax) -> SyntaxVisitorContinueKind { .skipChildren }
+
+            override func visit(_: ClosureExprSyntax) -> SyntaxVisitorContinueKind { .skipChildren }
             override func visit(_ node: MemberAccessExprSyntax) -> SyntaxVisitorContinueKind {
                 guard node.base == nil else { return .visitChildren }
                 if let call = node.parent?.as(FunctionCallExprSyntax.self), call.calledExpression.id == node.id {
@@ -319,7 +321,7 @@ final class TypeShapeCollector: SyntaxVisitor {
 
     private static let rawValueTypes: Set<String> = [
         "String", "Character", "Int", "Int8", "Int16", "Int32", "Int64",
-        "UInt", "UInt8", "UInt16", "UInt32", "UInt64", "Double", "Float"
+        "UInt", "UInt8", "UInt16", "UInt32", "UInt64", "Double", "Float",
     ]
 
     /// The bare name of each member of `A & B.C`: `["A", "C"]`.
@@ -346,27 +348,35 @@ final class TypeShapeCollector: SyntaxVisitor {
     }
 
     override func visit(_ node: StructDeclSyntax) -> SyntaxVisitorContinueKind {
-        record(Syntax(node), name: node.name.text, kind: .structure, isFinal: true,
-               members: node.memberBlock.members, inheritance: node.inheritanceClause, attributes: node.attributes)
+        record(
+            Syntax(node), name: node.name.text, kind: .structure, isFinal: true,
+            members: node.memberBlock.members, inheritance: node.inheritanceClause, attributes: node.attributes
+        )
         return .visitChildren
     }
 
     override func visit(_ node: ClassDeclSyntax) -> SyntaxVisitorContinueKind {
         let isFinal = node.modifiers.contains { $0.name.tokenKind == .keyword(.final) }
-        record(Syntax(node), name: node.name.text, kind: .classOrActor, isFinal: isFinal,
-               members: node.memberBlock.members, inheritance: node.inheritanceClause, attributes: node.attributes)
+        record(
+            Syntax(node), name: node.name.text, kind: .classOrActor, isFinal: isFinal,
+            members: node.memberBlock.members, inheritance: node.inheritanceClause, attributes: node.attributes
+        )
         return .visitChildren
     }
 
     override func visit(_ node: ActorDeclSyntax) -> SyntaxVisitorContinueKind {
-        record(Syntax(node), name: node.name.text, kind: .classOrActor, isFinal: true,
-               members: node.memberBlock.members, inheritance: node.inheritanceClause, attributes: node.attributes)
+        record(
+            Syntax(node), name: node.name.text, kind: .classOrActor, isFinal: true,
+            members: node.memberBlock.members, inheritance: node.inheritanceClause, attributes: node.attributes
+        )
         return .visitChildren
     }
 
     override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
-        record(Syntax(node), name: node.name.text, kind: .enumeration, isFinal: true,
-               members: node.memberBlock.members, inheritance: node.inheritanceClause, attributes: node.attributes)
+        record(
+            Syntax(node), name: node.name.text, kind: .enumeration, isFinal: true,
+            members: node.memberBlock.members, inheritance: node.inheritanceClause, attributes: node.attributes
+        )
         return .visitChildren
     }
 

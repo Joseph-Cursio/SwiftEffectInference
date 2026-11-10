@@ -82,7 +82,7 @@ public struct ConstructionFacts: Sendable, Equatable {
 
     /// No facts. A `PurityInferrer` holding this answers exactly as before the table existed, at
     /// the same cost.
-    public static let empty = ConstructionFacts()
+    public static let empty = Self()
 
     var declarations: [ConstructionDeclaration] = []
     var indicesByBareName: [String: [Int]] = [:]
@@ -113,7 +113,7 @@ public struct ConstructionFacts: Sendable, Equatable {
     var memo = ConstructionMemo.Slot()
 
     /// No facts — the same as `ConstructionFacts.empty`.
-    public init() {}
+    public init() { /* spelled out only to make the no-argument initializer public */ }
 
     /// Whether there is anything to consult. The inferrer skips the construction pass entirely
     /// when there is not, which is what keeps an unconfigured `PurityInferrer` at its measured cost.
@@ -130,8 +130,8 @@ public struct ConstructionFacts: Sendable, Equatable {
         let bare = qualifiedName.split(separator: ".").last.map(String.init) ?? qualifiedName
         return indices(bare)
             .lazy
-            .filter { self.declarations[$0].qualifiedName == qualifiedName }
-            .compactMap { self.declarations[$0].anyRefutation }
+            .filter { declarations[$0].qualifiedName == qualifiedName }
+            .compactMap { declarations[$0].anyRefutation }
             .first
     }
 
@@ -150,15 +150,15 @@ public struct ConstructionFacts: Sendable, Equatable {
     /// Pass sources in a **fixed** order. Which types are refuted does not depend on it — wherever
     /// a name, a typealias included, has several candidates, every one is consulted and none is
     /// chosen by when it was collected — but which witness is reported first among several does.
-    public static func build(from sources: [SourceFileSyntax]) -> ConstructionFacts {
+    public static func build(from sources: [SourceFileSyntax]) -> Self {
         let collector = TypeShapeCollector(viewMode: .sourceAccurate)
         for source in sources { collector.walk(source) }
         let raws = collector.finish()
 
-        var facts = ConstructionFacts(declarations: raws.map(\.unjudged), collector: collector)
+        var facts = Self(declarations: raws.map(\.unjudged), collector: collector)
         // One memo for every pass: what names mean is kept throughout, what is refuted per pass.
-        let memo = ConstructionMemo()
-        facts.memo.instance = memo
+        let passMemo = ConstructionMemo()
+        facts.memo.instance = passMemo
 
         // Monotone: a better-informed inferrer refutes a superset of what a less-informed one
         // does, and a witness once found is kept, so each pass only fills empty slots. It stops
@@ -168,7 +168,7 @@ public struct ConstructionFacts: Sendable, Equatable {
         var refuted = 0
         var pass = 0
         while pass <= bound {
-            memo.startPass()
+            passMemo.startPass()
             let inferrer = PurityInferrer(constructionFacts: facts)
             let fresh = raws.map { $0.evaluate(with: inferrer, facts: facts) }
             if pass == 0 { bound = fresh.reduce(2) { $0 + $1.slotCount } }
@@ -183,7 +183,7 @@ public struct ConstructionFacts: Sendable, Equatable {
         }
         // The table leaves the build without it — a consumer may share the table between threads —
         // but with what names were found to mean, which no pass changes.
-        facts.memo = .init(instance: nil, settled: memo.settled)
+        facts.memo = .init(instance: nil, settled: passMemo.settled)
         return facts
     }
 
@@ -233,17 +233,17 @@ public struct ConstructionFacts: Sendable, Equatable {
     /// Walked once per pass: a protocol extension's initializer belongs to every conformer, and
     /// is judged as each one's, but what its body constructs does not depend on whose it is.
     func refutation(constructingIn syntax: Syntax) -> PurityRefutation? {
-        guard let memo = memo.instance else { return memoised().refutation(constructingIn: syntax) }
-        if let known = memo.walks[syntax] { return known }
+        guard let instance = memo.instance else { return memoised().refutation(constructingIn: syntax) }
+        if let known = instance.walks[syntax] { return known }
         let checker = ConstructionChecker(facts: self)
         checker.walk(syntax)
-        memo.walks.updateValue(checker.refutation, forKey: syntax)
+        instance.walks.updateValue(checker.refutation, forKey: syntax)
         return checker.refutation
     }
 
     /// `self` with a memo: the build's, while one is attached, or else a new one, kept as long as
     /// the copy is — for a walk over one body, or one question asked outside a build.
-    func memoised() -> ConstructionFacts {
+    func memoised() -> Self {
         guard memo.instance == nil else { return self }
         var facts = self
         facts.memo.instance = ConstructionMemo()

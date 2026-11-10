@@ -1,7 +1,7 @@
+@testable import SwiftEffectInference
 import SwiftParser
 import SwiftSyntax
 import Testing
-@testable import SwiftEffectInference
 
 /// Single-file smoke suite verifying the skeleton compiles and the public
 /// types exist with the names the design doc commits to. Per-engine test
@@ -20,7 +20,7 @@ struct SkeletonSmokeTests {
             .idempotent,
             .externallyIdempotent(keyParameter: nil),
             .externallyIdempotent(keyParameter: "idempotencyKey"),
-            .nonIdempotent
+            .nonIdempotent,
         ]
         // Hashable conformance — round-trip through Set without collapse.
         let unique = Set(cases)
@@ -118,7 +118,7 @@ struct SkeletonSmokeTests {
         let cases: [EffectProvenance] = [
             .declared,
             .bodyInferred(depth: 2),
-            .callSite(reason: "framework gate FluentKit.save")
+            .callSite(reason: "framework gate FluentKit.save"),
         ]
         // Sendable + 3 cases — purely a compile-time / surface check.
         #expect(cases.count == 3)

@@ -66,7 +66,7 @@ public struct EffectAnnotationParser: Sendable {
         /// and `@EffectUnknown` (via `declaresUnknownEffect(declaration:)`). Both
         /// answer their own question with their own predicate rather than being
         /// mapped onto a tier they do not occupy.
-        public static let `default` = AttributeRecognition(
+        public static let `default` = Self(
             idempotent: ["Idempotent"],
             nonIdempotent: ["NonIdempotent"],
             observational: ["Observational"],
@@ -86,19 +86,19 @@ public struct EffectAnnotationParser: Sendable {
     /// Convenience for callers that don't customize attribute recognition.
     /// Equivalent to `EffectAnnotationParser().parseEffect(leadingTrivia:)`.
     public static func parseEffect(leadingTrivia: Trivia) -> Effect? {
-        EffectAnnotationParser().parseEffect(leadingTrivia: leadingTrivia)
+        Self().parseEffect(leadingTrivia: leadingTrivia)
     }
 
     /// Convenience for callers that don't customize attribute recognition.
     /// Equivalent to `EffectAnnotationParser().parseEffect(declaration:)`.
     public static func parseEffect(declaration: FunctionDeclSyntax) -> Effect? {
-        EffectAnnotationParser().parseEffect(declaration: declaration)
+        Self().parseEffect(declaration: declaration)
     }
 
     /// Convenience for callers that don't customize attribute recognition.
     /// Equivalent to `EffectAnnotationParser().parseEffect(declaration:)`.
     public static func parseEffect(declaration: VariableDeclSyntax) -> Effect? {
-        EffectAnnotationParser().parseEffect(declaration: declaration)
+        Self().parseEffect(declaration: declaration)
     }
 
     // MARK: Public API
@@ -300,7 +300,7 @@ public struct EffectAnnotationParser: Sendable {
         case (nil, nil): return nil
         case (let attr?, nil): return attr
         case (nil, let doc?): return doc
-        case (let attr?, let doc?): return attr == doc ? attr : nil
+        case let (attr?, doc?): return attr == doc ? attr : nil
         }
     }
 
@@ -334,6 +334,7 @@ public struct EffectAnnotationParser: Sendable {
             switch piece {
             case .docLineComment(let text), .docBlockComment(let text):
                 return text
+
             default:
                 return nil
             }
@@ -347,15 +348,20 @@ public struct EffectAnnotationParser: Sendable {
         switch token {
         case "pure":
             return .pure
+
         case "idempotent":
             return .idempotent
+
         case "observational":
             return .observational
+
         case "externally_idempotent":
             let afterToken = rest.dropFirst(token.count).trimmingLeadingWhitespace()
             return .externallyIdempotent(keyParameter: extractByQualifier(from: afterToken))
+
         case "non_idempotent":
             return .nonIdempotent
+
         case "transactional_idempotent":
             // `transactional_idempotent` is a tier in SwiftIdempotency's
             // *non-linear* lattice — it sits parallel to (and incomparable
@@ -372,6 +378,7 @@ public struct EffectAnnotationParser: Sendable {
             // replay. This matches SwiftIdempotency's own strict-mode
             // `transactional_idempotent → non_idempotent` degradation.
             return .nonIdempotent
+
         default:
             return nil
         }
@@ -387,11 +394,8 @@ public struct EffectAnnotationParser: Sendable {
         let ident = afterBy.firstIdentifier()
         return ident.isEmpty ? nil : String(ident)
     }
-}
 
-// MARK: - Clock-determinism annotation (collections/async workplan Phase 4)
-
-extension EffectAnnotationParser {
+    // MARK: - Clock-determinism annotation (collections/async workplan Phase 4)
 
     /// Recognizes the *clock-determinism* marker: a user-declared claim that
     /// an `async` function's observable behavior is a deterministic function
@@ -434,7 +438,7 @@ extension EffectAnnotationParser {
 
     /// Convenience for callers that don't customize attribute recognition.
     public static func isClockDeterministic(declaration: FunctionDeclSyntax) -> Bool {
-        EffectAnnotationParser().isClockDeterministic(declaration: declaration)
+        Self().isClockDeterministic(declaration: declaration)
     }
 
     /// Whether the author has declared the effect **cannot be determined**.
@@ -487,7 +491,7 @@ extension EffectAnnotationParser {
 
     /// Convenience for callers that don't customize attribute recognition.
     public static func declaresUnknownEffect(declaration: FunctionDeclSyntax) -> Bool {
-        EffectAnnotationParser().declaresUnknownEffect(declaration: declaration)
+        Self().declaresUnknownEffect(declaration: declaration)
     }
 
     /// Names recognized as the unknown-effect marker attribute.

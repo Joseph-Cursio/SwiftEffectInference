@@ -42,7 +42,7 @@ public struct BodyInference: Sendable, Equatable {
         /// `declared` outranks `heuristic`: if any single justification for a
         /// value rests entirely on annotations, the value is annotation-backed,
         /// and a redundant guess alongside it changes nothing.
-        static func strongest(_ lhs: Anchor, _ rhs: Anchor) -> Anchor {
+        static func strongest(_ lhs: Self, _ rhs: Self) -> Self {
             lhs == .declared || rhs == .declared ? .declared : .heuristic
         }
     }
@@ -66,6 +66,61 @@ public struct BodyInference: Sendable, Equatable {
         self.effect = effect
         self.depth = depth
         self.anchor = anchor
+    }
+}
+
+/// Shared scaffolding for the unannotated-declaration collectors below.
+/// Holds the parser used to test for a declared `@lint.effect` annotation
+/// and skips descent into closure expressions — the body walk for the lub
+/// calculation happens separately via `collectResults`, which enforces the
+/// escape-closure policy at the right granularity. Subclasses add only their
+/// concrete-typed `visit(_:)` and the collection they accumulate into.
+class UnannotatedDeclCollector: SourceAccurateSyntaxVisitor {
+    let parser: EffectAnnotationParser
+
+    init(parser: EffectAnnotationParser) {
+        self.parser = parser
+        super.init()
+    }
+
+    override func visit(_: ClosureExprSyntax) -> SyntaxVisitorContinueKind {
+        .skipChildren
+    }
+}
+
+/// Collects every `VariableDeclSyntax` with a closure-literal initialiser
+/// that has no `@lint.effect` annotation. Paired with
+/// `UnannotatedFunctionCollector` for upward inference: a closure binding
+/// whose body calls non-idempotent work becomes itself inferred
+/// non-idempotent, surfacing cross-reference violations that would
+/// otherwise stay silent.
+///
+/// `@lint.context`-only bindings are still collected (context-only decls
+/// can have their body's effect inferred); the check is specifically on
+/// the presence of a declared *effect* annotation.
+final class UnannotatedClosureBindingCollector: UnannotatedDeclCollector {
+    var bindings: [VariableDeclSyntax] = []
+
+    override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
+        if node.closureInitializer != nil,
+           parser.parseEffect(declaration: node) == nil {
+            bindings.append(node)
+        }
+        return .visitChildren
+    }
+}
+
+/// Collects every un-annotated `FunctionDeclSyntax` in a source file.
+/// Annotated decls already have declared effects; inferring would be
+/// redundant or could contradict the user's explicit choice.
+final class UnannotatedFunctionCollector: UnannotatedDeclCollector {
+    var functions: [FunctionDeclSyntax] = []
+
+    override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
+        if parser.parseEffect(declaration: node) == nil {
+            functions.append(node)
+        }
+        return .visitChildren
     }
 }
 
@@ -161,12 +216,12 @@ public enum BodyEffectInferrer {
         // ordering and its tie-break semantics (first occurrence of the
         // highest rank wins). The depth filter below reuses the same
         // `Effect.rank` so depth and lub can never disagree about ordering.
-        guard let lub = Effect.lub(of: calleeResults.map { $0.effect }) else {
+        guard let lub = Effect.lub(of: calleeResults.map(\.effect)) else {
             return nil
         }
         let lubRank = lub.rank
         let contributors = calleeResults.filter { $0.effect.rank == lubRank }
-        let depth = 1 + (contributors.map { $0.depth }.max() ?? 0)
+        let depth = 1 + (contributors.map(\.depth).max() ?? 0)
         // Anchor is decided by the lub's contributors alone, for the same reason
         // depth is: a callee whose effect is *below* the lub did not determine
         // the answer, so what it rested on cannot taint the answer. An
@@ -183,7 +238,7 @@ public enum BodyEffectInferrer {
         // thing holding the lub up, which is exactly the case `strongest`
         // leaves as `.heuristic`.
         let anchor = contributors
-            .map { $0.anchor }
+            .map(\.anchor)
             .reduce(BodyInference.Anchor.heuristic, BodyInference.Anchor.strongest)
         return BodyInference(effect: lub, depth: depth, anchor: anchor)
     }
@@ -239,61 +294,6 @@ public enum BodyEffectInferrer {
         "withThrowingTaskGroup",
         "withDiscardingTaskGroup",
         "withThrowingDiscardingTaskGroup",
-        "task"
+        "task",
     ]
-}
-
-/// Shared scaffolding for the unannotated-declaration collectors below.
-/// Holds the parser used to test for a declared `@lint.effect` annotation
-/// and skips descent into closure expressions — the body walk for the lub
-/// calculation happens separately via `collectResults`, which enforces the
-/// escape-closure policy at the right granularity. Subclasses add only their
-/// concrete-typed `visit(_:)` and the collection they accumulate into.
-class UnannotatedDeclCollector: SourceAccurateSyntaxVisitor {
-    let parser: EffectAnnotationParser
-
-    init(parser: EffectAnnotationParser) {
-        self.parser = parser
-        super.init()
-    }
-
-    override func visit(_ node: ClosureExprSyntax) -> SyntaxVisitorContinueKind {
-        .skipChildren
-    }
-}
-
-/// Collects every `VariableDeclSyntax` with a closure-literal initialiser
-/// that has no `@lint.effect` annotation. Paired with
-/// `UnannotatedFunctionCollector` for upward inference: a closure binding
-/// whose body calls non-idempotent work becomes itself inferred
-/// non-idempotent, surfacing cross-reference violations that would
-/// otherwise stay silent.
-///
-/// `@lint.context`-only bindings are still collected (context-only decls
-/// can have their body's effect inferred); the check is specifically on
-/// the presence of a declared *effect* annotation.
-final class UnannotatedClosureBindingCollector: UnannotatedDeclCollector {
-    var bindings: [VariableDeclSyntax] = []
-
-    override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
-        if node.closureInitializer != nil,
-           parser.parseEffect(declaration: node) == nil {
-            bindings.append(node)
-        }
-        return .visitChildren
-    }
-}
-
-/// Collects every un-annotated `FunctionDeclSyntax` in a source file.
-/// Annotated decls already have declared effects; inferring would be
-/// redundant or could contradict the user's explicit choice.
-final class UnannotatedFunctionCollector: UnannotatedDeclCollector {
-    var functions: [FunctionDeclSyntax] = []
-
-    override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
-        if parser.parseEffect(declaration: node) == nil {
-            functions.append(node)
-        }
-        return .visitChildren
-    }
 }

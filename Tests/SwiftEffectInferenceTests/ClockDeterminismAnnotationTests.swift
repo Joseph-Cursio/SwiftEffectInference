@@ -1,7 +1,7 @@
+@testable import SwiftEffectInference
 import SwiftParser
 import SwiftSyntax
 import Testing
-@testable import SwiftEffectInference
 
 @Suite
 struct ClockDeterminismAnnotationTests {
@@ -9,6 +9,7 @@ struct ClockDeterminismAnnotationTests {
     private func firstFunction(in source: String) throws -> FunctionDeclSyntax {
         final class Finder: SyntaxVisitor {
             var found: FunctionDeclSyntax?
+
             override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
                 if found == nil { found = node }
                 return .skipChildren

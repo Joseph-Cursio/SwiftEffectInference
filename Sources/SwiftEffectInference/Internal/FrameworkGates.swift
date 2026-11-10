@@ -1,5 +1,49 @@
 import Foundation
 
+/// Combines file-level imports and project-level config into an
+/// "is this framework's whitelist active right now?" predicate. Used by
+/// `CallSiteEffectInferrer` to gate per-framework classifications.
+///
+/// ## Semantics
+///
+/// `imports` is the **concrete** set of base module names the enclosing
+/// source file imports (see `ImportCollector.imports(in:)`). An empty
+/// set means "no framework-gated whitelists fire" — synthetic fixtures
+/// without imports and adopter files that simply don't use a given
+/// framework behave identically. Callers that want to bypass the gate
+/// must supply the relevant framework name explicitly.
+///
+/// When `enabledFrameworks` is `nil`, treat every framework as enabled —
+/// the default when a project hasn't set `enabled_framework_whitelists`
+/// in its `.swiftprojectlint.yml`. A non-nil value restricts
+/// classification to the listed frameworks.
+///
+/// Both the import gate and the config gate must be active for the
+/// whitelist to fire.
+public struct FrameworkContext: Sendable {
+    public let imports: Set<String>
+    public let enabled: Set<String>?
+
+    public init(imports: Set<String>, enabled: Set<String>?) {
+        self.imports = imports
+        self.enabled = enabled
+    }
+
+    public func isFrameworkActive(_ framework: String) -> Bool {
+        let enabledOK = enabled?.contains(framework) ?? true
+        // Stdlib / built-in frameworks (slot 22: SwiftConcurrency) bypass
+        // the import gate — adopter code doesn't typically write
+        // `import SwiftConcurrency` because there's no such module.
+        // Config opt-out still applies.
+        if FrameworkGates.alwaysActiveFrameworks.contains(framework) {
+            return enabledOK
+        }
+        let aliases = FrameworkGates.importAliases(forFramework: framework)
+        let importOK = imports.contains(framework) || !aliases.isDisjoint(with: imports)
+        return importOK && enabledOK
+    }
+}
+
 /// Per-framework grouping of the `CallSiteEffectInferrer` whitelists.
 ///
 /// Round 14 split the previously-monolithic `idempotentFrameworkTypes`
@@ -21,18 +65,31 @@ public enum FrameworkGates {
 
     // MARK: - Framework names (opaque strings — used as dictionary keys)
 
+    /// Apple's Foundation framework.
     public static let foundation = "Foundation"
+    /// SwiftNIO's core module, `NIOCore` (apple/swift-nio).
     public static let nio = "NIOCore"
+    /// The `AWSLambdaEvents` module (swift-server/swift-aws-lambda-events).
     public static let awsLambdaEvents = "AWSLambdaEvents"
+    /// SwiftLog's `Logging` module (apple/swift-log).
     public static let logging = "Logging"
+    /// Apple's `os` module — unified logging (`Logger`, `os_log`).
     public static let osLog = "os"
+    /// Swift Metrics' `Metrics` module (apple/swift-metrics).
     public static let metrics = "Metrics"
+    /// Vapor's Fluent ORM core, `FluentKit`; importing the `Fluent` meta-package also opens this gate.
     public static let fluent = "FluentKit"
+    /// The Hummingbird web framework (hummingbird-project/hummingbird).
     public static let hummingbird = "Hummingbird"
+    /// The Composable Architecture (pointfreeco/swift-composable-architecture).
     public static let composableArchitecture = "ComposableArchitecture"
+    /// The `AWSLambdaRuntime` module (swift-server/swift-aws-lambda-runtime).
     public static let awsLambdaRuntime = "AWSLambdaRuntime"
+    /// The `HttpPipeline` module of pointfreeco/swift-web.
     public static let httpPipeline = "HttpPipeline"
+    /// The Vapor web framework (vapor/vapor).
     public static let vapor = "Vapor"
+    /// Swift's built-in concurrency (`Task`, actors, `AsyncStream`); not a real module, so always active.
     public static let swiftConcurrency = "SwiftConcurrency"
 
     /// Every framework this project recognises. Order-insensitive.
@@ -41,7 +98,7 @@ public enum FrameworkGates {
     public static let knownFrameworks: Set<String> = [
         foundation, nio, awsLambdaEvents, logging, osLog, metrics, fluent,
         hummingbird, composableArchitecture, awsLambdaRuntime, httpPipeline,
-        vapor, swiftConcurrency
+        vapor, swiftConcurrency,
     ]
 
     // MARK: - Always-active (stdlib / built-in) frameworks
@@ -134,7 +191,7 @@ public enum FrameworkGates {
         // Hummingbird — error constructors (value types; throwing them
         // is the control-flow mechanism, but constructing the value
         // is pure).
-        "HTTPError": hummingbird
+        "HTTPError": hummingbird,
     ]
 
     /// Returns the framework that owns a given idempotent type
@@ -158,7 +215,7 @@ public enum FrameworkGates {
     /// Gating on `import FluentKit` resolves the ambiguity.
     private static let nonIdempotentMethodsByFramework: [String: String] = [
         "save": fluent,
-        "delete": fluent
+        "delete": fluent,
     ]
 
     /// Returns the framework that owns a given non-idempotent method
@@ -208,7 +265,7 @@ public enum FrameworkGates {
         // Both adopters use these via `|>` / `>=>` pipe-forward operators
         // on `Conn` state; each call is a value-typed mutation.
         "writeStatus": httpPipeline,
-        "respond": httpPipeline
+        "respond": httpPipeline,
     ]
 
     /// Returns the framework that owns a given idempotent method
@@ -232,7 +289,7 @@ public enum FrameworkGates {
     ///   to a curried `(Conn) -> Conn` primitive.
     private static let idempotentMethodPhrasingByFramework: [String: String] = [
         fluent: "query-builder read",
-        httpPipeline: "pipeline primitive"
+        httpPipeline: "pipeline primitive",
     ]
 
     /// Returns the per-framework noun phrase for the
@@ -356,19 +413,19 @@ public enum FrameworkGates {
         "require": ["parameters": hummingbird],
         "write": [
             "outputWriter": awsLambdaRuntime,
-            "responseWriter": awsLambdaRuntime
+            "responseWriter": awsLambdaRuntime,
         ],
         "finish": ["responseWriter": awsLambdaRuntime],
         "get": [
             "router": hummingbird, "app": vapor,
-            "queryParameters": hummingbird
+            "queryParameters": hummingbird,
         ],
         "post": ["router": hummingbird, "app": vapor],
         "put": ["router": hummingbird, "app": vapor],
         "patch": ["router": hummingbird, "app": vapor],
         "delete": ["router": hummingbird, "app": vapor],
         "register": ["app": vapor],
-        "sleep": ["Task": swiftConcurrency]
+        "sleep": ["Task": swiftConcurrency],
     ]
 
     /// Returns the framework that owns a given idempotent
@@ -407,7 +464,7 @@ public enum FrameworkGates {
     private static let idempotentReceiverMethodsMultiFramework: [String: [String: Set<String>]] = [
         "get": [
             "parameters": [hummingbird, vapor]
-        ]
+        ],
     ]
 
     /// Returns the set of frameworks any of which qualifies a given
@@ -457,49 +514,5 @@ public enum FrameworkGates {
         forBareNameIdempotentOverride name: String
     ) -> String? {
         bareNameIdempotentOverridesByFramework[name]
-    }
-}
-
-/// Combines file-level imports and project-level config into an
-/// "is this framework's whitelist active right now?" predicate. Used by
-/// `CallSiteEffectInferrer` to gate per-framework classifications.
-///
-/// ## Semantics
-///
-/// `imports` is the **concrete** set of base module names the enclosing
-/// source file imports (see `ImportCollector.imports(in:)`). An empty
-/// set means "no framework-gated whitelists fire" — synthetic fixtures
-/// without imports and adopter files that simply don't use a given
-/// framework behave identically. Callers that want to bypass the gate
-/// must supply the relevant framework name explicitly.
-///
-/// When `enabledFrameworks` is `nil`, treat every framework as enabled —
-/// the default when a project hasn't set `enabled_framework_whitelists`
-/// in its `.swiftprojectlint.yml`. A non-nil value restricts
-/// classification to the listed frameworks.
-///
-/// Both the import gate and the config gate must be active for the
-/// whitelist to fire.
-public struct FrameworkContext: Sendable {
-    public let imports: Set<String>
-    public let enabled: Set<String>?
-
-    public init(imports: Set<String>, enabled: Set<String>?) {
-        self.imports = imports
-        self.enabled = enabled
-    }
-
-    public func isFrameworkActive(_ framework: String) -> Bool {
-        let enabledOK = enabled?.contains(framework) ?? true
-        // Stdlib / built-in frameworks (slot 22: SwiftConcurrency) bypass
-        // the import gate — adopter code doesn't typically write
-        // `import SwiftConcurrency` because there's no such module.
-        // Config opt-out still applies.
-        if FrameworkGates.alwaysActiveFrameworks.contains(framework) {
-            return enabledOK
-        }
-        let aliases = FrameworkGates.importAliases(forFramework: framework)
-        let importOK = imports.contains(framework) || !aliases.isDisjoint(with: imports)
-        return importOK && enabledOK
     }
 }

@@ -1,13 +1,13 @@
+@testable import SwiftEffectInference
 import SwiftParser
 import Testing
-@testable import SwiftEffectInference
 
 /// A typealias is a name like any other: it means the alias Swift picks where it is written, and
 /// where that is in doubt, every alias of the name. Aliases were once followed by bare name, first
 /// collected first — so which types refuted turned on source order, and in one order a `UUID`
 /// default behind a nested `typealias Stamp` went unseen.
 @Suite("Construction purity: typealiases")
-struct ConstructionTypealiasTests {
+struct ConstructionTypealiasTests: ConstructionTesting {
 
     // MARK: - Namesakes
 
@@ -99,7 +99,7 @@ struct ConstructionTypealiasTests {
         struct T { let n: Int }
         extension T { typealias Stamp = UUID; init(stamp: Stamp = .init()) { n = 0 } }
         func f() -> T { T() }
-        """
+        """,
     ])
     func unsettledAliasIsAUnion(source: String) throws {
         #expect(try constructionRefuted("f", in: source), "\(source)")
@@ -115,7 +115,7 @@ struct ConstructionTypealiasTests {
         """
         struct T { typealias Stamp = Date; let at: Stamp; init(at: Stamp = .now) { self.at = at } }
         func f() -> T { T() }
-        """
+        """,
     ])
     func singleAlias(source: String) throws {
         #expect(try constructionRefuted("f", in: source), "\(source)")
@@ -147,7 +147,7 @@ struct ConstructionTypealiasTests {
         struct T { var start: Clock.Instant = .now; let n: Int }
         func f(_ n: Int) -> T { T(n: n) }
         """,
-        "struct T { typealias Clock = ContinuousClock; var start: Clock.Instant = .now }\nfunc f() -> T { T() }"
+        "struct T { typealias Clock = ContinuousClock; var start: Clock.Instant = .now }\nfunc f() -> T { T() }",
     ])
     func aliasHeadingAQualifiedSpelling(source: String) throws {
         #expect(try constructionRefuted("f", in: source), "\(source)")
@@ -169,7 +169,7 @@ struct ConstructionTypealiasTests {
         typealias Stamp = Store.Token
         func f() -> Any { Stamp() }
         """,
-        "struct T { typealias Instant = ContinuousClock.Instant; var start: Instant = .now }\nfunc f() -> T { T() }"
+        "struct T { typealias Instant = ContinuousClock.Instant; var start: Instant = .now }\nfunc f() -> T { T() }",
     ])
     func aliasToANestedType(source: String) throws {
         #expect(try constructionRefuted("f", in: source), "\(source)")
@@ -217,7 +217,7 @@ struct ConstructionTypealiasTests {
         enum Outer { typealias Stamp = UUID }
         struct T { let s: Space.Stamp = .init() }
         func f() -> T { T() }
-        """
+        """,
     ])
     func memberAlias(source: String) throws {
         #expect(try constructionRefuted("f", in: source), "\(source)")
