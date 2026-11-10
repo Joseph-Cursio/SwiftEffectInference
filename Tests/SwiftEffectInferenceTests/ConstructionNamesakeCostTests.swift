@@ -1,6 +1,5 @@
 @testable import SwiftEffectInference
 import SwiftParser
-import SwiftSyntax
 import Testing
 
 /// What building `ConstructionFacts` costs where one name is declared in many files, on the shapes

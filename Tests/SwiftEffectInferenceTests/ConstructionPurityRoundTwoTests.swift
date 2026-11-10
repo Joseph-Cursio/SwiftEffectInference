@@ -1,4 +1,3 @@
-@testable import SwiftEffectInference
 import Testing
 
 /// The second adversarial round against `ConstructionFacts`: holes in the revision that resolved a

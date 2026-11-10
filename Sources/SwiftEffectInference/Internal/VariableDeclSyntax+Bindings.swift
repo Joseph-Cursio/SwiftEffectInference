@@ -17,14 +17,6 @@ package extension VariableDeclSyntax {
         else { return nil }
         return initialiser
     }
-
-    /// The simple identifier of the single binding, if any. Returns `nil`
-    /// for multi-binding decls or non-identifier patterns (tuple patterns,
-    /// wildcards, etc.).
-    var firstBindingName: String? {
-        guard bindings.count == 1 else { return nil }
-        return bindings.first?.boundName
-    }
 }
 
 package extension PatternBindingSyntax {

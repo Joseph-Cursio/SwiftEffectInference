@@ -1,5 +1,3 @@
-import SwiftSyntax
-
 /// **Why** purity was refuted — the witness `PurityVerdict` does not carry.
 ///
 /// `PurityVerdict` says which clause failed (`.pure` / `.pureButPartial` /

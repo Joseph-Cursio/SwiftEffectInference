@@ -1,5 +1,3 @@
-import Foundation
-
 /// Stdlib-collection operations that are **not** anchors for bare-name
 /// inference. The first-slice bare-name whitelist classifies `append`,
 /// `insert`, and friends as non_idempotent, which is correct for

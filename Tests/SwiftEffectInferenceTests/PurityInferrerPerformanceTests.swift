@@ -1,4 +1,3 @@
-import Foundation
 @testable import SwiftEffectInference
 import SwiftParser
 import SwiftSyntax

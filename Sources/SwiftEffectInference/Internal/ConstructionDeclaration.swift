@@ -200,11 +200,6 @@ struct ConstructionDeclaration: Sendable, Equatable {
         .refutingConstruction(type: qualifiedName, via: step, cause: cause)
     }
 
-    /// The scope it is declared in: `A.B` for `A.B.C`, `""` at the top level.
-    var parentScope: String {
-        qualifiedName.split(separator: ".").dropLast().joined(separator: ".")
-    }
-
     /// A class that declares no designated initializer of its own inherits its superclass's.
     var inheritsDesignatedInitializers: Bool {
         kind == .classOrActor && !initializers.contains { $0.origin == .declared && !$0.isConvenience }

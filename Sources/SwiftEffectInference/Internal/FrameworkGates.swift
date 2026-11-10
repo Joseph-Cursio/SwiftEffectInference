@@ -1,5 +1,3 @@
-import Foundation
-
 /// Per-framework grouping of the `CallSiteEffectInferrer` whitelists.
 ///
 /// Round 14 split the previously-monolithic `idempotentFrameworkTypes`

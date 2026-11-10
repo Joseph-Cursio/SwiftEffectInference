@@ -1,4 +1,3 @@
-@testable import SwiftEffectInference
 import Testing
 
 extension ConstructionPurityRoundTwoTests {

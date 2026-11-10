@@ -187,3 +187,13 @@ trailing_comma:
 no_empty_block:
   disabled_block_types:
     - closure_blocks
+
+# Analyzer rules run only under `swiftlint analyze`, which needs a compiler log.
+# Use scripts/swiftlint-analyze.sh: SwiftLint 0.65.1 crashes running several
+# analyzer rules at once, so it runs them one at a time. explicit_self is left
+# out: it conflicts with redundant_self (see the SwiftLint Exclusions notes).
+analyzer_rules:
+  - capture_variable
+  - typesafe_array_init
+  - unused_declaration
+  - unused_import

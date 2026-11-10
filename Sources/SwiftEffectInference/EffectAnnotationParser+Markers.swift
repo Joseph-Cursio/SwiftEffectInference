@@ -1,3 +1,4 @@
+import Foundation
 import SwiftSyntax
 
 // MARK: - Clock-determinism annotation (collections/async workplan Phase 4)
