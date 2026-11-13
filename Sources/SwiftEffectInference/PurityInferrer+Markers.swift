@@ -67,9 +67,36 @@ extension PurityInferrer {
         // uses either label. Bare `contentsOf` is NOT, and must never be added
         // here -- see `FileReadChecker`, which matches it on the callee instead.
         "contentsOfFile", "contentsOfDirectory",
-        // File-system reads that never name a type in this list. Each is a
-        // distinctive member or label rather than a type, which is what lets them
-        // sit here without the over-refutation the `String`/`Data` note forbids.
+        // System effects outside the process: opening a URL or file in another
+        // app, app-level state, modal UI, notifications, sounds, scripts, process
+        // spawning, the keychain and SQLite. Added after a generated totality law
+        // over `NSWorkspace.shared.open(url)` (SwiftLintRuleStudio's
+        // `SystemXcodeLauncher.open(_:)`) was judged pure and run about 4,500
+        // times, opening a browser each time (SwiftInferProperties, 2026-11-12).
+        // Each token survived an adversarial search for a pure use, and has a
+        // witness in `SystemEffectMarkerTests`. Measured over 13,550 functions in
+        // 21 repositories (SwiftInferProperties' and SwiftProjectLint's sources
+        // and the corpus they scan): 23 move to refuted, every one a real effect
+        // (keychain 6, SQLite 6, `runModal` 5, `NSApp` 3, notifications 2, the
+        // `NSWorkspace` open above); none is in either consumer's own sources.
+        // Rejected on
+        // that search because a nested value type lets a pure function name
+        // them: `NSPasteboard`, `UIPasteboard`, `NSSound`, `NSAlert`, the
+        // feedback generators, `NWConnection` and its family, `NSXPCConnection`,
+        // `SMAppService`, `DistributedNotificationCenter`, `FetchDescriptor`.
+        // `NSWorkspace` has the same exposure through its notification-name
+        // constants, as `NotificationCenter` and `FileManager` do; it stays,
+        // like them, because no corpus function reads one purely.
+        "NSWorkspace", "NSApp", "activateFileViewerSelecting", "urlForApplication",
+        "openURL", "LSOpenCFURLRef",
+        "runModal", "UNUserNotificationCenter", "NSUserNotificationCenter",
+        "AudioServicesPlaySystemSound", "NSBeep",
+        "NSAppleScript", "NSUserAppleScriptTask", "NSUserUnixTask", "OSAScript",
+        "posix_spawn", "execv", "AuthorizationCreate", "CFNotificationCenterPostNotification",
+        "SecItemAdd", "SecItemUpdate", "SecItemDelete", "SecItemCopyMatching",
+        "sqlite3_open", "sqlite3_open_v2", "sqlite3_exec", "sqlite3_prepare_v2", "sqlite3_step",
+        "sqlite3_close", "sqlite3_close_v2", "sqlite3_finalize", "sqlite3_reset",
+        "sqlite3_bind_text", "sqlite3_column_text", "sqlite3_errmsg",
     ]
 
     /// Nondeterminism markers — sources whose result is not a function of the
