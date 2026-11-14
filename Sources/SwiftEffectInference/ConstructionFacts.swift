@@ -108,6 +108,11 @@ public struct ConstructionFacts: Sendable, Equatable {
     var memberTypes: [String: [String: [MemberType]]] = [:]
     /// Stored, not computed: the inferrer asks on every body it judges.
     var hasRefutations = false
+    /// The names the package declares where another body can reach them — see `PackageNames`. Not
+    /// construction facts, but built from the same sources in the same pass: `InertVocabulary`
+    /// lets a body that names `Date` only as a type relax when what it calls is the package's own
+    /// (#30).
+    var packageNames = PackageNames.empty
     /// What has been worked out already — attached by `build(from:)` for its passes, and by a walk
     /// over a body for that walk. Never part of what the table says, nor of its equality.
     var memo = ConstructionMemo.Slot()
@@ -184,6 +189,7 @@ public struct ConstructionFacts: Sendable, Equatable {
         // The table leaves the build without it — a consumer may share the table between threads —
         // but with what names were found to mean, which no pass changes.
         facts.memo = .init(instance: nil, settled: passMemo.settled)
+        facts.packageNames = PackageNames.build(from: sources)
         return facts
     }
 

@@ -307,7 +307,7 @@ public struct PurityInferrer: Sendable {
     /// The order is the one every entry point relies on — markers, then totality —
     /// so the witness a consumer sees does not depend on which door it came in by.
     func bodyRefutation(_ syntax: Syntax) -> PurityRefutation? {
-        if let marker = refutingMarker(in: syntax) { return marker }
+        if let marker = refutingMarker(in: syntax, relaxingTypeNames: true) { return marker }
         return trap(in: syntax).map { .partiality($0) }
     }
 

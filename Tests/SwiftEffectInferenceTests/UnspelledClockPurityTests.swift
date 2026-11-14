@@ -10,7 +10,8 @@ import Testing
 ///
 /// Found by the review of [#30](https://github.com/Joseph-Cursio/SwiftEffectInference/issues/30)'s
 /// first fix, which stopped matching `Date` named as a type and turned every one of these
-/// `.pure` in bodies that spelled it.
+/// `.pure` in bodies that spelled it. The fix that landed relaxes only bodies `DateInertnessChecker`
+/// clears; `TypePositionPurityTests` and `TypePositionHandOffTests` hold its cases.
 @Suite("A clock read that spells no marker is still a clock read")
 struct UnspelledClockPurityTests {
 

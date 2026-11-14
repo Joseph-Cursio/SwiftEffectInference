@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/DateInertnessChecker.swift b/Sources/SwiftEffectInference/DateInertnessChecker.swift
+index 260dd74..d6ccbfa 100644
+--- a/Sources/SwiftEffectInference/DateInertnessChecker.swift
++++ b/Sources/SwiftEffectInference/DateInertnessChecker.swift
+@@ -54,7 +54,7 @@ final class DateInertnessChecker: SourceAccurateSyntaxVisitor {
+     /// token in its body was what refuted a default that reads the clock under a parameter's name.
+     func blocker(in root: Syntax) -> String? {
+         self.root = root
+-        if package.rebindsLiterals {
++        if false, package.rebindsLiterals {
+             return "the package rebinds a literal type or makes an SDK type's values callable"
+         }
+         if let outer = Self.enclosingBody(around: root) { return outer }

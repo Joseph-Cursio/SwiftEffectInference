@@ -1,0 +1,22 @@
+diff --git a/Sources/SwiftEffectInference/DateInertnessChecker+Vocabulary.swift b/Sources/SwiftEffectInference/DateInertnessChecker+Vocabulary.swift
+index 175fb09..9ac0917 100644
+--- a/Sources/SwiftEffectInference/DateInertnessChecker+Vocabulary.swift
++++ b/Sources/SwiftEffectInference/DateInertnessChecker+Vocabulary.swift
+@@ -36,8 +36,6 @@ extension DateInertnessChecker {
+         "baseAddress", "withCString", "withUTF8", "withContiguousStorageIfAvailable",
+         "withContiguousMutableStorageIfAvailable", "withMemoryRebound", "withVaList", "withExtendedLifetime",
+         "isTriviallyIdentical", "isIdentical", "span", "mutableSpan", "Span", "MutableSpan", "RawSpan",
+-        // Bytes handed to a closure, and offsets into them, are an address; so is a platform string.
+-        "withBytes", "byteOffsets", "withPlatformString",
+     ]
+ 
+     /// Free functions that read a clock or a random source when called, but whose names are too
+@@ -53,7 +51,7 @@ extension DateInertnessChecker {
+     private static let blockingPrefixes = [
+         "localized", "CFDate", "CFCalendar", "CFTimeZone", "CFLocale", "CFAbsoluteTime", "CFGregorian",
+         "CFUUIDCreate", "uuid_generate", "GKRandom", "GKARC4", "GKMersenne", "GKLinearCongruential",
+-        "withUnsafe", "unsafe", "_", "objc_", "random", "withPlatform",
++        "withUnsafe", "unsafe", "_", "objc_", "random",
+     ]
+ 
+     /// Name suffixes that block: every Foundation formatter and format style.
