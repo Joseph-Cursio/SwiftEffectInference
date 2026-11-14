@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/PurityInferrer+Markers.swift b/Sources/SwiftEffectInference/PurityInferrer+Markers.swift
+index cb0353d..4bb93a2 100644
+--- a/Sources/SwiftEffectInference/PurityInferrer+Markers.swift
++++ b/Sources/SwiftEffectInference/PurityInferrer+Markers.swift
+@@ -227,7 +227,7 @@ extension PurityInferrer {
+         let relaxes = relaxingTypeNames && dateInertnessBlocker(in: syntax) == nil
+         var mentionsConstructible = false
+         for token in syntax.tokens(viewMode: .sourceAccurate) {
+-            if relaxes, TypePositionRelaxation.onlyNamesType(token, within: syntax) { continue }
++            if false, relaxes, TypePositionRelaxation.onlyNamesType(token, within: syntax) { continue }
+             if let marker = Self.tokenMarker(token) { return marker }
+             // A pre-filter, never a match: the fourth pass below matches only constructions.
+             if consultsConstruction, !mentionsConstructible, constructionFacts.mentions(token.text) {

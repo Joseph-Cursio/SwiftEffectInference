@@ -689,6 +689,62 @@
       "expected": "killed",
       "test": "timeZoneReadsAnInstant",
       "label": "a time zone's reader given an instant refutes too -- `secondsFromGMT(for: d)` is read as asking about now"
+    },
+    {
+      "id": "type-position-never-relaxes",
+      "patch": "patches/type-position-never-relaxes.patch",
+      "shape": "type-position-control",
+      "expected": "killed",
+      "test": "typePosition",
+      "label": "no token in type position ever relaxes — #30's fix undone, so a `Date` that only names the type refutes again"
+    },
+    {
+      "id": "inertness-gate-skipped",
+      "patch": "patches/inertness-gate-skipped.patch",
+      "shape": "type-position-hole",
+      "expected": "killed",
+      "test": "rebindingScope",
+      "label": "type positions relax without DateInertnessChecker's verdict — a body that reads the clock through a date value it never spells is judged pure"
+    },
+    {
+      "id": "literal-rebinding-judged",
+      "patch": "patches/literal-rebinding-judged.patch",
+      "shape": "type-position-hole",
+      "expected": "killed",
+      "test": "literalTypeOrFormattedOutput",
+      "label": "a package that rebinds a literal type or a keyword is judged anyway — `\"region\".tag` builds a package type no name check sees"
+    },
+    {
+      "id": "numeric-declaration-judged",
+      "patch": "patches/numeric-declaration-judged.patch",
+      "shape": "type-position-hole",
+      "expected": "killed",
+      "test": "numberedMember",
+      "label": "a package that declares a member named with a number is judged anyway — `Kinds.1()` reaches `Date()` through a literal token no resolution sees"
+    },
+    {
+      "id": "platform-buffer-unblocked",
+      "patch": "patches/platform-buffer-unblocked.patch",
+      "shape": "type-position-hole",
+      "expected": "killed",
+      "test": "platformBuffer",
+      "label": "withBytes, byteOffsets and withPlatformString leave the blocklist — a package namesake vouches for an SDK call that hands over an address"
+    },
+    {
+      "id": "protocol-container-clean",
+      "patch": "patches/protocol-container-clean.patch",
+      "shape": "type-position-hole",
+      "expected": "killed",
+      "test": "protocolExtensionOrIdentity",
+      "label": "a package protocol counts as a clean container — a body in its extension relaxes though a conformer can supply members no body names"
+    },
+    {
+      "id": "inout-label-unspelled",
+      "patch": "patches/inout-label-unspelled.patch",
+      "shape": "type-position-control",
+      "expected": "killed",
+      "test": "plainCallRelaxes",
+      "label": "an inout parameter's label is matched without its `&` — a package call that passes `&x` no longer matches its own declaration and over-refutes"
     }
   ]
 }

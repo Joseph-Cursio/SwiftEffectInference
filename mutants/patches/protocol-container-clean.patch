@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/Internal/PackageNames.swift b/Sources/SwiftEffectInference/Internal/PackageNames.swift
+index ded3f6a..17dfe20 100644
+--- a/Sources/SwiftEffectInference/Internal/PackageNames.swift
++++ b/Sources/SwiftEffectInference/Internal/PackageNames.swift
+@@ -166,7 +166,7 @@ struct PackageNames: Sendable, Equatable {
+         )
+         // A protocol's extension sees `Self`, which the protocol's own `where` clause or inheritance can
+         // pin to an SDK type (`RawValue == LocalizedStringResource`, `Self: NSLocale`).
+-        let declaredTypes = Set(entries.lazy.filter { $0.isType && !$0.isAlias && !$0.isProtocol }.map(\.path))
++        let declaredTypes = Set(entries.lazy.filter { $0.isType && !$0.isAlias }.map(\.path))
+         cleanContainers = typePaths.intersection(declaredTypes)
+     }
+ 

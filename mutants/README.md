@@ -109,6 +109,13 @@ Requires a clean working tree.
 | `bridged-now-unmatched` | purity-unspelled | killed | `bridgedTwins` |
 | `now-by-default-unmatched` | purity-unspelled | killed | `timeZoneReadsNow` |
 | `now-by-default-given-an-instant` | purity-unspelled | killed | `timeZoneReadsAnInstant` |
+| `type-position-never-relaxes` | type-position-control | killed | `typePosition` |
+| `inertness-gate-skipped` | type-position-hole | killed | `rebindingScope` |
+| `literal-rebinding-judged` | type-position-hole | killed | `literalTypeOrFormattedOutput` |
+| `numeric-declaration-judged` | type-position-hole | killed | `numberedMember` |
+| `platform-buffer-unblocked` | type-position-hole | killed | `platformBuffer` |
+| `protocol-container-clean` | type-position-hole | killed | `protocolExtensionOrIdentity` |
+| `inout-label-unspelled` | type-position-control | killed | `plainCallRelaxes` |
 
 The first two attack the join-semilattice the whole effect analysis rests on: a
 `lub` that returns the safer effect would launder a dangerous one into a safe grade,
@@ -116,7 +123,8 @@ and a rank collision breaks the total order §26.3.3 deliberately keeps linear. 
 third makes the purity inferrer admit `Date()` — the unearned-purity it exists to
 refute (§26.3.1). All ten verified killed; the construction mutants below,
 forty-eight more, the classifier's one, the five construction-cost ones, and
-the twenty-two for the unspelled reads, likewise.
+the twenty-two for the unspelled reads, and the seven for
+#30's type positions, likewise.
 
 ## `purity-witness`: a shape about what the oracle *says*
 
@@ -247,6 +255,18 @@ afresh, so `typealias F = Self.E` in a protocol that a type named `F` conforms
 to reads `F.E` as `Self.E.E`, and so on, a new lookup every time, so the cut
 for a lookup that comes back to itself never fires. The stack running out
 kills it, as it kills `lookup-loop-not-cut`.
+
+## `type-position-*`: a `Date` that only names the type
+
+[#30](https://github.com/Joseph-Cursio/SwiftEffectInference/issues/30) relaxes a
+`Date` or `UUID` that only names the type, but only in a body
+`DateInertnessChecker` clears. The two controls undo the relaxation, one
+entirely and one only where a call passes `&x`, so a plain body over-refutes
+again. The five holes each remove one guard of the gate, and each turns a
+body that reads a clock or an address `.pure`: the gate itself, the refusal
+to judge a package that rebinds a literal or names a member with a number,
+the blocklist's platform-buffer names, and the rule that a protocol is never
+a clean container. All seven verified killed.
 
 ## Adding a mutant
 

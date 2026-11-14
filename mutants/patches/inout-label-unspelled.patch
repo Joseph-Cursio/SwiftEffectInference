@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/Internal/PackageNameEntry.swift b/Sources/SwiftEffectInference/Internal/PackageNameEntry.swift
+index 238ff15..b473ac7 100644
+--- a/Sources/SwiftEffectInference/Internal/PackageNameEntry.swift
++++ b/Sources/SwiftEffectInference/Internal/PackageNameEntry.swift
+@@ -12,7 +12,7 @@ struct PackageNameEntry: Sendable, Equatable {
+         var isInout = false
+ 
+         /// The label a call spells for an argument this parameter binds.
+-        var spelled: String? { isInout ? "&" + (label ?? "") : label }
++        var spelled: String? { label }
+ 
+         /// Whether a call with `labels` (`nil` for an unlabelled argument or a trailing closure)
+         /// binds to `parameters` with every argument written: an omitted default or a variadic

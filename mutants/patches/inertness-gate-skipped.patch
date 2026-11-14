@@ -1,0 +1,13 @@
+diff --git a/Sources/SwiftEffectInference/PurityInferrer+Markers.swift b/Sources/SwiftEffectInference/PurityInferrer+Markers.swift
+index cb0353d..734a2b3 100644
+--- a/Sources/SwiftEffectInference/PurityInferrer+Markers.swift
++++ b/Sources/SwiftEffectInference/PurityInferrer+Markers.swift
+@@ -224,7 +224,7 @@ extension PurityInferrer {
+     /// its default's implicit member, never relaxes: there the type is what the member builds.
+     func refutingMarker(in syntax: Syntax, relaxingTypeNames: Bool = false) -> PurityRefutation? {
+         let consultsConstruction = !constructionFacts.isEmpty
+-        let relaxes = relaxingTypeNames && dateInertnessBlocker(in: syntax) == nil
++        let relaxes = relaxingTypeNames
+         var mentionsConstructible = false
+         for token in syntax.tokens(viewMode: .sourceAccurate) {
+             if relaxes, TypePositionRelaxation.onlyNamesType(token, within: syntax) { continue }
