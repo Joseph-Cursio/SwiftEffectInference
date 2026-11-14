@@ -106,7 +106,9 @@ extension PurityInferrer {
     /// Matched by bare-identifier token, so this is deliberately conservative:
     /// it refutes `Date()` *and* the deterministic `Date(timeIntervalSince1970:)`
     /// alike (the token scan can't tell them apart), and refutes injected
-    /// `random(in:using:)` as well as the system-RNG form. Over-refutation is
+    /// `random(in:using:)` as well as the system-RNG form. The one exception is
+    /// `Date` or `UUID` written only as a type (`let d: [Date: Int] = [:]`) in a
+    /// body `DateInertnessChecker` clears (#30): naming the type reads nothing. Over-refutation is
     /// the sound direction on the effect lattice — better to withhold `.pure`
     /// than to claim it for a clock-reading function — and both consumers (the
     /// linter's candidate nudge, the inferrer's `pure`-suggestion gate) prefer
@@ -215,10 +217,17 @@ extension PurityInferrer {
     /// with `Date()`, while a `.nondeterminismSource` came from the classifier and
     /// read the argument labels. A consumer writing a diagnostic can say so; one
     /// that only wants a Bool never has to look.
-    func refutingMarker(in syntax: Syntax) -> PurityRefutation? {
+    ///
+    /// `relaxingTypeNames` is set for a body, and lets a `Date` or `UUID` that only names the type
+    /// go unrefuted when the body passes `DateInertnessChecker` (#30), which
+    /// reads the package's names from `constructionFacts`. A parameter's type, judged for
+    /// its default's implicit member, never relaxes: there the type is what the member builds.
+    func refutingMarker(in syntax: Syntax, relaxingTypeNames: Bool = false) -> PurityRefutation? {
         let consultsConstruction = !constructionFacts.isEmpty
+        let relaxes = relaxingTypeNames && dateInertnessBlocker(in: syntax) == nil
         var mentionsConstructible = false
         for token in syntax.tokens(viewMode: .sourceAccurate) {
+            if relaxes, TypePositionRelaxation.onlyNamesType(token, within: syntax) { continue }
             if let marker = Self.tokenMarker(token) { return marker }
             // A pre-filter, never a match: the fourth pass below matches only constructions.
             if consultsConstruction, !mentionsConstructible, constructionFacts.mentions(token.text) {
@@ -235,8 +244,22 @@ extension PurityInferrer {
         return constructionFacts.refutation(constructingIn: syntax)
     }
 
+    /// Whether `name` is in a token set, however it is spelled: the gate asks this of the name
+    /// without its backticks, which the token scan reads with them. (`now` is a marker only as a
+    /// base-less `.now`, which the gate refuses by itself; a parameter named `now` is the injection
+    /// #30 is about.)
+    static func isMarkerName(_ name: String) -> Bool {
+        sideEffectMarkers.contains(name) || nondeterministicMarkers.contains(name) || propertyMarkers.contains(name)
+    }
+
+    /// What in `syntax` keeps a `Date` or `UUID` named as a type refuting, or `nil` when nothing
+    /// does.
+    func dateInertnessBlocker(in syntax: Syntax) -> String? {
+        DateInertnessChecker(packageNames: constructionFacts.packageNames).blocker(in: syntax)
+    }
+
     /// The marker `token` refutes by itself, or `nil`: the token sets, and the shapes the
-    /// predicates below recognise around a single token. The tree-wide passes stay in
+    /// position predicates recognise around a single token. The tree-wide passes stay in
     /// `refutingMarker(in:)`, which asks this first for every token, in source order.
     private static func tokenMarker(_ token: TokenSyntax) -> PurityRefutation? {
         if Self.sideEffectMarkers.contains(token.text), Self.isMarkerPosition(token) {
@@ -342,42 +365,5 @@ extension PurityInferrer {
             return true
         }
         return call.arguments.isEmpty && call.trailingClosure == nil
-    }
-
-    /// Whether `token` names a `formatted(…)` call that formats with the user's locale, time zone
-    /// or calendar: `d.formatted()`, `n.formatted(.number)`, `t.formatted(.units())`.
-    ///
-    /// Foundation declares `formatted` on `Date`, the integer and floating-point types, `Decimal`,
-    /// `Duration`, a range of dates, string sequences, `Measurement` and `PersonNameComponents`.
-    /// Each formats with the ambient settings unless locale, time zone and calendar are all
-    /// pinned, and a relative style reads the clock too. The receiver's type is not visible here,
-    /// so any called `formatted` with a receiver refutes, except two forms known to read nothing:
-    /// an `.iso8601` style, which is always GMT and never localized, and swift-syntax's
-    /// `formatted(using:)`, which lays out source text. A package's own deterministic `formatted`
-    /// or style is refuted along with Foundation's, and so is swift-syntax's `formatted()` with
-    /// its default. That is the sound direction.
-    ///
-    /// A base-less `.formatted(formatter)` is a coding strategy's case, so it does not match. Nor
-    /// does a `formatted` that is not called, which is most often some other type's property. A
-    /// reference to Foundation's own method, `let render: () -> String = d.formatted`, is missed.
-    static func isAmbientFormatting(_ token: TokenSyntax) -> Bool {
-        guard token.text == "formatted",
-              let reference = token.parent?.as(DeclReferenceExprSyntax.self),
-              let member = reference.parent?.as(MemberAccessExprSyntax.self),
-              member.base != nil, member.declName.id == reference.id,
-              let call = member.parent?.as(FunctionCallExprSyntax.self),
-              call.calledExpression.id == member.id else { return false }
-        if call.arguments.contains(where: { $0.label?.text == "using" }) { return false }
-        guard call.arguments.count == 1, let style = call.arguments.first, style.label == nil else { return true }
-        return baseLessRoot(of: style.expression) != "iso8601"
-    }
-
-    /// The member at the bottom of a chain when it is written without a base: `iso8601` for
-    /// `.iso8601.year().month()`.
-    private static func baseLessRoot(of expression: ExprSyntax) -> String? {
-        if let call = expression.as(FunctionCallExprSyntax.self) { return baseLessRoot(of: call.calledExpression) }
-        guard let member = expression.as(MemberAccessExprSyntax.self) else { return nil }
-        guard let base = member.base else { return member.declName.baseName.text }
-        return baseLessRoot(of: base)
     }
 }

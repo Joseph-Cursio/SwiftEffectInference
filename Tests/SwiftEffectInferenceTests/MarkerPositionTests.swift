@@ -48,8 +48,9 @@ struct MarkerPositionTests: ConstructionTesting {
     @Test("the code around them still is", arguments: [
         // An interpolation is code.
         "func stamp() -> String { \"at \\(Date())\" }",
-        // A key path's root names a type.
-        "func f(_ ds: [Date]) -> [Double] { ds.map(\\Date.timeIntervalSince1970) }",
+        // A key path's root names a type, and is still scanned. (`\Date.x` is not: a `Date` that
+        // only names the type no longer refutes, #30; see `TypePositionPurityTests`.)
+        "func f(_ hs: [FileHandle]) -> [Int32] { hs.map(\\FileHandle.fileDescriptor) }",
         // A member name may be a static method — `Int.random` — so it is still matched.
         "func f(_ rows: [Row]) -> [Int] { rows.map { $0.random } }",
         // A subscript component's arguments are evaluated.
